@@ -16,6 +16,33 @@ import userService from './user-service';
 import roleService from './role-service';
 import user from '../entity/user';
 import starService from './star-service';
+
+// 发信相关的资源上限。取值依据：
+//  - 单个附件 10MB / 合计 25MB：再大时 Worker（128MB 内存上限）在解析 base64 副本时
+//    容易 OOM，而且发信服务本身也有体积上限；
+//  - 收件人 50：防止一次请求扇出成大量外部调用，打满 Worker 的子请求配额
+//    （免费版每请求只有 50 次子请求，还要留余量给 D1/KV）；
+//  - 正文 1MB：正常邮件远达不到，但可以挡住用超长正文撑内存的玩法。
+const SEND_LIMIT = {
+	ATTACHMENT_COUNT: 10,
+	ATTACHMENT_SIZE: 10 * 1024 * 1024,
+	ATTACHMENT_TOTAL: 25 * 1024 * 1024,
+	INLINE_IMAGE_COUNT: 10,
+	RECIPIENT_COUNT: 50,
+	CONTENT_LENGTH: 1024 * 1024
+};
+
+// 估算 base64 字符串解码后的字节数。刻意不真的解码 —— 那会再多占一份内存。
+function base64ByteSize(base64) {
+	if (typeof base64 !== 'string') {
+		return 0;
+	}
+
+	const pure = base64.split(',').pop();
+	const padding = pure.endsWith('==') ? 2 : pure.endsWith('=') ? 1 : 0;
+
+	return Math.max(0, Math.floor(pure.length * 3 / 4) - padding);
+}
 import dayjs from 'dayjs';
 import kvConst from '../const/kv-const';
 import { t } from '../i18n/i18n'
@@ -60,8 +87,16 @@ const emailService = {
 			size = 50;
 		}
 
+		// 下限钳制：size 为负数时 SQLite 的 LIMIT -1 会退化为全表扫描
+		if (size < 1) {
+			size = 10;
+		}
+
 		if (isNaN(allReceive)) {
 			let accountRow = await accountService.selectById(c, accountId);
+			if (!accountRow) {
+				throw new BizError(t('notExistAccount'));
+			}
 			allReceive = accountRow.allReceive;
 		}
 
@@ -223,22 +258,30 @@ const emailService = {
 		const emailIdList = emailIds.split(',').map(Number);
 		const { syncDelete } = await settingService.query(c);
 
+		// in 查询受 D1 100 个绑定参数限制，按每批 90 个 id 分片执行
+		const batchSize = 90;
+
 		if (syncDelete === settingConst.syncDelete.OPEN) {
-			const owned = await orm(c).select({ emailId: email.emailId }).from(email)
-				.where(and(eq(email.userId, userId), inArray(email.emailId, emailIdList)))
-				.all();
-			const ownedIds = owned.map(row => row.emailId);
-			if (ownedIds.length) {
-				await this.physicsDelete(c, { emailIds: ownedIds.join(',') });
+			for (let i = 0; i < emailIdList.length; i += batchSize) {
+				const ids = emailIdList.slice(i, i + batchSize);
+				const owned = await orm(c).select({ emailId: email.emailId }).from(email)
+					.where(and(eq(email.userId, userId), inArray(email.emailId, ids)))
+					.all();
+				const ownedIds = owned.map(row => row.emailId);
+				if (ownedIds.length) {
+					await this.physicsDelete(c, { emailIds: ownedIds.join(',') });
+				}
 			}
 			return;
 		}
 
-		await orm(c).update(email).set({ isDel: isDel.DELETE }).where(
-			and(
-				eq(email.userId, userId),
-				inArray(email.emailId, emailIdList)))
-			.run();
+		for (let i = 0; i < emailIdList.length; i += batchSize) {
+			await orm(c).update(email).set({ isDel: isDel.DELETE }).where(
+				and(
+					eq(email.userId, userId),
+					inArray(email.emailId, emailIdList.slice(i, i + batchSize))))
+				.run();
+		}
 	},
 
 	receive(c, params, cidAttList, r2domain) {
@@ -261,9 +304,56 @@ const emailService = {
 			attachments = [] //附件
 		} = params;
 
+		// ---- 资源限制 ----
+		// 必须放在**任何副作用之前**（发信、落库、上传）。
+		// 原来"附件数量"的校验写在邮件已经发出、数据已经落库之后 —— 用户看到报错，
+		// 但信其实已经发走了，附件没存上，发送次数也已经扣了。
+
+		// 参数默认值只覆盖 undefined，客户端传 null 时要单独兜住，
+		// 否则下面的 attachments.length 会抛 TypeError 变成 500。
+		if (!Array.isArray(attachments)) {
+			attachments = [];
+		}
+
+		if (!Array.isArray(receiveEmail) || receiveEmail.length === 0) {
+			throw new BizError(t('emptyReceiveEmail'));
+		}
+
+		if (receiveEmail.length > SEND_LIMIT.RECIPIENT_COUNT) {
+			throw new BizError(t('tooManyRecipient', { msg: SEND_LIMIT.RECIPIENT_COUNT }));
+		}
+
+		if (attachments.length > SEND_LIMIT.ATTACHMENT_COUNT) {
+			throw new BizError(t('attLimit'));
+		}
+
+		let attachmentTotalSize = 0;
+
+		for (const att of attachments) {
+			const size = base64ByteSize(att?.content);
+
+			if (size > SEND_LIMIT.ATTACHMENT_SIZE) {
+				throw new BizError(t('attTooLarge', { msg: SEND_LIMIT.ATTACHMENT_SIZE / 1024 / 1024 }));
+			}
+
+			attachmentTotalSize += size;
+		}
+
+		if (attachmentTotalSize > SEND_LIMIT.ATTACHMENT_TOTAL) {
+			throw new BizError(t('attTotalTooLarge', { msg: SEND_LIMIT.ATTACHMENT_TOTAL / 1024 / 1024 }));
+		}
+
+		if (typeof content === 'string' && content.length > SEND_LIMIT.CONTENT_LENGTH) {
+			throw new BizError(t('contentTooLarge'));
+		}
+
 		const { resendTokens, r2Domain, send, domainList } = await settingService.query(c);
 
 		let { imageDataList, html } = await attService.toImageUrlHtml(c, content);
+
+		if (imageDataList.length > SEND_LIMIT.INLINE_IMAGE_COUNT) {
+			throw new BizError(t('imageAttLimit'));
+		}
 
 		//判断是否关闭发件功能
 		if (send === settingConst.send.CLOSE) {
@@ -434,19 +524,13 @@ const emailService = {
 		//保存到数据库并返回结果
 		const emailResult = await orm(c).insert(email).values(emailData).returning().get();
 
-		//保存内嵌附件
+		//保存内嵌附件（数量上限已在函数开头统一校验，这里只管落库）
 		if (imageDataList.length > 0) {
-			if (imageDataList.length > 10) {
-				throw new BizError(t('imageAttLimit'));
-			}
 			await attService.saveArticleAtt(c, imageDataList, userId, accountId, emailResult.emailId);
 		}
 
-		//保存普通附件
+		//保存普通附件（同上）
 		if (attachments?.length > 0) {
-			if (attachments.length > 10) {
-				throw new BizError(t('attLimit'));
-			}
 			await attService.saveSendAtt(c, attachments, userId, accountId, emailResult.emailId);
 		}
 
@@ -462,6 +546,8 @@ const emailService = {
 		let daySendTotal = await c.env.kv.get(kvConst.SEND_DAY_COUNT + dateStr);
 
 		//记录每天发件次数统计
+		//注意：KV 不支持原子自增，这里是"读-加-写"，并发发信时会丢计数，仅作为有损的近似统计值展示；
+		//若要精确计数需改为 D1 的 INSERT ... ON CONFLICT DO UPDATE SET count = count + 1（需新增表与迁移，代价较大）
 		if (!daySendTotal) {
 			await c.env.kv.put(kvConst.SEND_DAY_COUNT + dateStr, JSON.stringify(receiveEmail.length), { expirationTtl: 60 * 60 * 24 });
 		} else  {
@@ -642,8 +728,16 @@ const emailService = {
 
 		const { noRecipient  } = await settingService.query(c);
 
+		// in 查询受 D1 100 个绑定参数限制，按每批 90 个收件人分片查询后合并
+		const batchSize = 90;
+
 		//查询所有收件人账号信息
-		let accountList = await orm(c).select().from(account).where(inArray(account.email, receiveEmail)).all();
+		let accountList = [];
+
+		for (let i = 0; i < receiveEmail.length; i += batchSize) {
+			const rows = await orm(c).select().from(account).where(inArray(account.email, receiveEmail.slice(i, i + batchSize))).all();
+			accountList.push(...rows);
+		}
 
 		// 对于含+未精确匹配的收件人，获取基础地址账号
 		const plusEmails = receiveEmail.filter(
@@ -657,9 +751,11 @@ const emailService = {
 			const existing = new Set(accountList.map(a => a.email));
 			const needed = baseEmails.filter(e => !existing.has(e));
 			if (needed.length > 0) {
-				const rows = await orm(c).select().from(account)
-					.where(inArray(account.email, needed)).all();
-				baseAccounts.push(...rows);
+				for (let i = 0; i < needed.length; i += batchSize) {
+					const rows = await orm(c).select().from(account)
+						.where(inArray(account.email, needed.slice(i, i + batchSize))).all();
+					baseAccounts.push(...rows);
+				}
 			}
 		}
 
@@ -830,6 +926,9 @@ const emailService = {
 
 		if (isNaN(allReceive)) {
 			let accountRow = await accountService.selectById(c, accountId);
+			if (!accountRow) {
+				throw new BizError(t('notExistAccount'));
+			}
 			allReceive = accountRow.allReceive;
 		}
 
@@ -860,14 +959,27 @@ const emailService = {
 	async physicsDelete(c, params) {
 		let { emailIds } = params;
 		emailIds = emailIds.split(',').map(Number);
-		await attService.removeByEmailIds(c, emailIds);
-		await starService.removeByEmailIds(c, emailIds);
-		await orm(c).delete(email).where(inArray(email.emailId, emailIds)).run();
+
+		// in 查询受 D1 100 个绑定参数限制，按每批 90 个 id 分片执行
+		const batchSize = 90;
+
+		for (let i = 0; i < emailIds.length; i += batchSize) {
+			const ids = emailIds.slice(i, i + batchSize);
+			await attService.removeByEmailIds(c, ids);
+			await starService.removeByEmailIds(c, ids);
+			await orm(c).delete(email).where(inArray(email.emailId, ids)).run();
+		}
 	},
 
 	async physicsDeleteUserIds(c, userIds) {
-		await attService.removeByUserIds(c, userIds);
-		await orm(c).delete(email).where(inArray(email.userId, userIds)).run();
+		// in 查询受 D1 100 个绑定参数限制，按每批 90 个 id 分片执行
+		const batchSize = 90;
+
+		for (let i = 0; i < userIds.length; i += batchSize) {
+			const ids = userIds.slice(i, i + batchSize);
+			await attService.removeByUserIds(c, ids);
+			await orm(c).delete(email).where(inArray(email.userId, ids)).run();
+		}
 	},
 
 	updateEmailStatus(c, params) {
@@ -914,6 +1026,11 @@ const emailService = {
 
 		if (size > 50) {
 			size = 50;
+		}
+
+		// 下限钳制：size 为负数时 SQLite 的 LIMIT -1 会退化为全表扫描
+		if (size < 1) {
+			size = 10;
 		}
 
 		if (isNaN(full)) {
@@ -1142,8 +1259,14 @@ const emailService = {
 	},
 
 	async read(c, params, userId) {
-		const { emailIds } = params;
-		await orm(c).update(email).set({ unread: emailConst.unread.READ }).where(and(eq(email.userId, userId), inArray(email.emailId, emailIds)));
+		const emailIds = params.emailIds || [];
+
+		// in 查询受 D1 100 个绑定参数限制，按每批 90 个 id 分片执行
+		const batchSize = 90;
+
+		for (let i = 0; i < emailIds.length; i += batchSize) {
+			await orm(c).update(email).set({ unread: emailConst.unread.READ }).where(and(eq(email.userId, userId), inArray(email.emailId, emailIds.slice(i, i + batchSize))));
+		}
 	}
 };
 

@@ -4,6 +4,7 @@ import orm from '../entity/orm';
 import user from '../entity/user';
 import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { emailConst, isDel, roleConst, settingConst, userConst } from '../const/entity-const';
+import domainUtils from '../utils/domain-uitls';
 import kvConst from '../const/kv-const';
 import KvConst from '../const/kv-const';
 import cryptoUtils from '../utils/crypto-utils';
@@ -19,6 +20,8 @@ import reqUtils from '../utils/req-utils';
 import {oauth} from "../entity/oauth";
 import oauthService from "./oauth-service";
 import settingService from './setting-service';
+import userContext from '../security/user-context';
+import securityLog from '../utils/security-log';
 import starService from './star-service';
 
 const userService = {
@@ -110,10 +113,17 @@ const userService = {
 	async physicsDelete(c, params) {
 		let { userIds } = params;
 		userIds = userIds.split(',').map(Number);
-		await starService.removeByUserIds(c, userIds);
-		await accountService.physicsDeleteByUserIds(c, userIds);
-		await oauthService.deleteByUserIds(c, userIds);
-		await orm(c).delete(user).where(inArray(user.userId, userIds)).run();
+
+		// in 查询受 D1 100 个绑定参数限制，按每批 90 个 id 分片执行
+		const batchSize = 90;
+
+		for (let i = 0; i < userIds.length; i += batchSize) {
+			const ids = userIds.slice(i, i + batchSize);
+			await starService.removeByUserIds(c, ids);
+			await accountService.physicsDeleteByUserIds(c, ids);
+			await oauthService.deleteByUserIds(c, ids);
+			await orm(c).delete(user).where(inArray(user.userId, ids)).run();
+		}
 	},
 
 	async list(c, params) {
@@ -134,6 +144,11 @@ const userService = {
 		}
 
 		if (size > 50) {
+			size = 50;
+		}
+
+		// 下限钳制：size 为负数时 SQLite 的 LIMIT -1 会退化为全表扫描
+		if (size < 1) {
 			size = 50;
 		}
 
@@ -297,11 +312,19 @@ const userService = {
 			throw new BizError(t('roleNotExist'));
 		}
 
+		await this.assertCanAssignRole(c, type);
+
 		await orm(c)
 			.update(user)
 			.set({ type })
 			.where(eq(user.userId, userId))
 			.run();
+
+		securityLog.write('user_role_changed', {
+			targetUserId: userId,
+			roleId: type,
+			operator: userContext.getUser(c)?.email
+		});
 
 	},
 
@@ -321,12 +344,29 @@ const userService = {
 			.run();
 	},
 
+	/**
+	 * 提权防护：委托给 roleService 统一实现。
+	 *
+	 * 之所以收口到 role-service：/user/add、/user/setType、/role/set（往角色里灌权限）、
+	 * /regKey/add（签一张指定角色的注册码）是同一类操作 —— 都会把角色或权限发出去。
+	 * 四条路必须共用同一套口径，否则挡了这条、漏了那条，等于没挡。
+	 */
+	assertCanAssignRole(c, roleId) {
+		return roleService.assertCanAssignRole(c, roleId);
+	},
+
 	async add(c, params) {
 
 		let { email, type, password } = params;
 
-		if (!c.env.domain.includes(emailUtils.getDomain(email))) {
+		if (!domainUtils.isAllowedEmailDomain(c, email)) {
 			throw new BizError(t('notEmailDomain'));
+		}
+
+		// 与 /register 同一条规则：不允许通过建号接口创建 `+` 别名。
+		// 别名只能走 /account/add —— 那里能校验基础地址的归属。
+		if (emailUtils.getName(email).includes('+')) {
+			throw new BizError(t('aliasNotAllowed'));
 		}
 
 		if (password.length < 6) {
@@ -355,6 +395,8 @@ const userService = {
 			throw new BizError(t('roleNotExist'));
 		}
 
+		await this.assertCanAssignRole(c, type);
+
 		const { salt, hash } = await saltHashUtils.hashPassword(password);
 
 		const userId = await userService.insert(c, { email, password: hash, salt, type });
@@ -362,6 +404,13 @@ const userService = {
 		await userService.updateUserInfo(c, userId, true);
 
 		await accountService.insert(c, { userId: userId, email, type, name: emailUtils.getName(email) });
+
+		securityLog.write('user_created_by_admin', {
+			email,
+			userId,
+			roleId: type,
+			operator: userContext.getUser(c)?.email
+		});
 	},
 
 	async resetDaySendCount(c) {

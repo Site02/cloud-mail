@@ -1,5 +1,5 @@
 <template>
-  <div id="login-box" :style=" background ? 'background: var(--el-bg-color)' : ''" v-loading="oauthLoading" element-loading-text="登录中...">
+  <div id="login-box" :style=" background ? 'background: var(--el-bg-color)' : ''" v-loading="oauthLoading" :element-loading-text="$t('oauthLoadingText')">
     <div id="background-wrap" v-if="!settingStore.settings.background">
       <div class="x1 cloud"></div>
       <div class="x2 cloud"></div>
@@ -10,6 +10,9 @@
     <div v-else :style="background"></div>
     <div class="form-wrapper">
       <div class="container">
+        <div class="lang-switch" @click="toggleLang">
+          {{ settingStore.lang === 'en' ? '中文' : 'English' }}
+        </div>
         <span class="form-title">{{ settingStore.settings.title }}</span>
         <span class="form-desc" v-if="show === 'login'">{{ $t('loginTitle') }}</span>
         <span class="form-desc" v-else>{{ $t('regTitle') }}</span>
@@ -41,6 +44,13 @@
           </el-input>
           <el-input v-model="form.password" :placeholder="$t('password')" type="password" autocomplete="off" @keyup.enter="submit">
           </el-input>
+          <!-- 密码连续输错到阈值后才会显示：后端会返回 430 提示需要人机验证 -->
+          <div v-show="loginVerifyShow"
+               class="login-turnstile"
+               :data-sitekey="settingStore.settings.siteKey"
+               data-callback="onLoginTurnstileSuccess"
+               data-error-callback="onLoginTurnstileError"
+          ></div>
           <el-button class="btn" type="primary" @click="submit" :loading="loginLoading"
           >{{ $t('loginBtn') }}
           </el-button>
@@ -108,9 +118,16 @@
           <div class="switch" @click="show = 'login'" v-else>{{ $t('hasAccount') }} <span>{{ $t('loginSwitch') }}</span>
           </div>
         </template>
+        <!-- 指向可收录的介绍页。
+             刻意用原生 <a href> 而不是 router-link：这是要交给搜索引擎爬取的页面，
+             原生链接爬虫才能顺着走。（应用本体设的是 noindex, follow —— 保留 follow
+             就是为了让这条链接能被跟进。） -->
+        <div class="about-entry">
+          <a href="/about">{{ $t('aboutSite') }}</a>
+        </div>
       </div>
     </div>
-    <el-dialog class="bind-dialog" v-model="showBindForm"  title="注册邮箱" >
+    <el-dialog class="bind-dialog" v-model="showBindForm"  :title="$t('bindTitle')" >
       <div class="bind-container">
         <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="bindForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off" @keyup.enter="bind">
           <template #append v-if="!hideLoginDomain">
@@ -139,14 +156,18 @@
                   type="text" autocomplete="off" @keyup.enter="bind"/>
         <el-input v-if="settingStore.settings.regKey === 2" v-model="bindForm.code"
                   :placeholder="$t('regKeyOptional')" type="text" autocomplete="off" @keyup.enter="bind"/>
+        <!-- OAuth 首登建号也是注册，所以同样要遵守后台的「注册人机验证」设置 -->
+        <div v-show="bindVerifyShow"
+             class="bind-turnstile"
+             :data-sitekey="settingStore.settings.siteKey"
+             data-callback="onBindTurnstileSuccess"
+             data-error-callback="onBindTurnstileError"
+        ></div>
         <el-button class="btn" type="primary" @click="bind" :loading="bindLoading"
-        >绑定
+        >{{ $t('bindBtn') }}
         </el-button>
       </div>
     </el-dialog>
-    <a v-show="settingStore.settings.projectLink" class="github" href="https://github.com/maillab/cloud-mail">
-      <Icon icon="mingcute:github-line" color="#1890ff" width="20" height="20" />
-    </a>
   </div>
 </template>
 
@@ -158,6 +179,8 @@ import {login} from "@/request/login.js";
 import {register} from "@/request/login.js";
 import {websiteConfig} from "@/request/setting.js";
 import {isEmail} from "@/utils/verify-utils.js";
+import {encryptPassword} from "@/utils/password-crypto.js";
+import {toggleLang} from "@/utils/lang.js";
 import {useSettingStore} from "@/store/setting.js";
 import {useAccountStore} from "@/store/account.js";
 import {useUserStore} from "@/store/user.js";
@@ -202,7 +225,11 @@ const oauthProviders = computed(() => {
 const bindForm = reactive({
   email: '',
   oauthUserId: '',
-  code: ''
+  code: '',
+  // 后端在「第三方身份尚未绑定邮箱」时签发的短期票据。
+  // 绑定接口只认这张票据里的身份，所以它必须原样带回，
+  // 少传或过期都会被拒绝（提示重新授权）。
+  bindTicket: ''
 })
 
 const form = reactive({
@@ -250,6 +277,90 @@ window.onTurnstileError = (e) => {
 
 window.loadAfter = (e) => {
   console.log('loadAfter')
+}
+
+// ---- 登录的人机验证 ----
+// 只在「同一账号密码连续输错到阈值」后才出现：后端返回 430，前端再把控件渲染出来。
+// 平时不显示，正常登录不受影响。
+const loginVerifyShow = ref(false)
+let loginVerifyToken = ''
+let loginTurnstileId = null
+
+window.onLoginTurnstileSuccess = (token) => {
+  loginVerifyToken = token
+}
+
+window.onLoginTurnstileError = (e) => {
+  console.warn('登录人机验证加载失败', e)
+  setTimeout(() => {
+    nextTick(() => {
+      if (!loginTurnstileId) {
+        loginTurnstileId = window.turnstile.render('.login-turnstile')
+      } else {
+        window.turnstile.reset(loginTurnstileId)
+      }
+    })
+  }, 1500)
+}
+
+// 渲染或刷新登录用的验证码控件
+function renderLoginTurnstile() {
+  nextTick(() => {
+    if (!window.turnstile) {
+      return
+    }
+    if (!loginTurnstileId) {
+      loginTurnstileId = window.turnstile.render('.login-turnstile')
+    } else {
+      window.turnstile.reset(loginTurnstileId)
+    }
+  })
+}
+
+// ---- OAuth 绑定建号的人机验证 ----
+// 走的是和注册表单同一套判断：后台设成「始终要求」或「按次数」且已超阈值时显示。
+const bindVerifyShow = ref(false)
+let bindVerifyToken = ''
+let bindTurnstileId = null
+
+window.onBindTurnstileSuccess = (token) => {
+  bindVerifyToken = token
+}
+
+window.onBindTurnstileError = (e) => {
+  console.warn('绑定人机验证加载失败', e)
+  setTimeout(() => {
+    nextTick(() => {
+      if (!bindTurnstileId) {
+        bindTurnstileId = window.turnstile.render('.bind-turnstile')
+      } else {
+        window.turnstile.reset(bindTurnstileId)
+      }
+    })
+  }, 1500)
+}
+
+// 与注册表单同一条件：始终要求(0)，或按次数(2)且当前已超阈值
+function needRegisterVerify() {
+  const s = settingStore.settings
+  return s.registerVerify === 0 || (s.registerVerify === 2 && s.regVerifyOpen)
+}
+
+function renderBindTurnstile() {
+  if (!needRegisterVerify()) {
+    return
+  }
+  bindVerifyShow.value = true
+  nextTick(() => {
+    if (!window.turnstile) {
+      return
+    }
+    if (!bindTurnstileId) {
+      bindTurnstileId = window.turnstile.render('.bind-turnstile')
+    } else {
+      window.turnstile.reset(bindTurnstileId)
+    }
+  })
 }
 
 window.loadBefore = (e) => {
@@ -319,12 +430,15 @@ async function oauthGetUser() {
   loginFns[provider](code, window.location.origin + '/login').then(data => {
 
     bindForm.oauthUserId = data.userInfo.oauthUserId;
+    bindForm.bindTicket = data.bindTicket || '';
 
     if (!data.token) {
       showBindForm.value = true
+      // 这个对话框干的就是「注册一个邮箱」，所以要按注册的设置决定是否要人机验证
+      renderBindTurnstile()
       oauthLoading.value = false
       ElMessage({
-        message: '请注册绑定一个邮箱',
+        message: t('bindEmailMsg'),
         type: 'warning',
         duration: 4000,
         plain: true,
@@ -387,7 +501,23 @@ function bind() {
 
   }
 
-  const form = {email, oauthUserId: bindForm.oauthUserId, code: bindForm.code}
+  // 后台要求人机验证时，必须先拿到 token
+  if (needRegisterVerify() && !bindVerifyToken) {
+    ElMessage({
+      message: t('needBotVerify'),
+      type: 'error',
+      plain: true,
+    })
+    return
+  }
+
+  const form = {
+    email,
+    oauthUserId: bindForm.oauthUserId,
+    code: bindForm.code,
+    bindTicket: bindForm.bindTicket,
+    token: bindVerifyToken
+  }
 
   bindLoading.value = true
   oauthBindUser(form).then(data => {
@@ -397,7 +527,7 @@ function bind() {
   })
 }
 
-const submit = () => {
+const submit = async () => {
 
   if (loginLoading.value) return
 
@@ -430,9 +560,27 @@ const submit = () => {
     return
   }
 
+  // 已经要求人机验证时，必须先拿到 token 再提交
+  if (loginVerifyShow.value && !loginVerifyToken) {
+    ElMessage({
+      message: t('needBotVerify'),
+      type: 'error',
+      plain: true,
+    })
+    return
+  }
+
   loginLoading.value = true
-  login(email, form.password).then(async data => {
+  // 密码先加密再出网（未配置服务端密钥时原样返回明文，由 TLS 保护）
+  const encryptedPassword = await encryptPassword(form.password)
+  login(email, encryptedPassword, loginVerifyToken).then(async data => {
     await saveToken(data.token)
+  }).catch(e => {
+    // 430 = 后端要求人机验证（该账号密码连续输错到阈值）
+    if (e?.code === 430) {
+      loginVerifyShow.value = true
+      renderLoginTurnstile()
+    }
   }).finally(() => {
     loginLoading.value = false
   })
@@ -469,7 +617,7 @@ function refreshWebsiteConfig() {
 }
 
 
-function submitRegister() {
+async function submitRegister() {
 
   if (registerLoading.value) return
 
@@ -575,7 +723,8 @@ function submitRegister() {
 
   const form = {
     email,
-    password: registerForm.password,
+    // 与服务端私钥配对加密后再提交（未配置密钥时原样返回明文）
+    password: await encryptPassword(registerForm.password),
     token: verifyToken,
     code: registerForm.code
   }
@@ -688,6 +837,20 @@ function submitRegister() {
     font-size: 22px !important;
   }
 
+  .lang-switch {
+    text-align: right;
+    font-size: 13px;
+    color: var(--form-desc-color);
+    cursor: pointer;
+    user-select: none;
+    margin-bottom: 6px;
+    transition: color 0.2s ease;
+
+    &:hover {
+      color: var(--el-color-primary);
+    }
+  }
+
   .switch {
     margin-top: 20px;
     text-align: center;
@@ -695,6 +858,24 @@ function submitRegister() {
     span {
       color: var(--login-switch-color);
       cursor: pointer;
+    }
+  }
+
+  /* 介绍页入口：做成低调的次要链接 ——
+     它不是登录流程的一部分，不该和「注册 / 登录」抢注意力。 */
+  .about-entry {
+    margin-top: 22px;
+    text-align: center;
+    font-size: 13px;
+
+    a {
+      color: var(--form-desc-color);
+      text-decoration: none;
+      transition: color 0.2s ease;
+
+      &:hover {
+        color: var(--el-color-primary);
+      }
     }
   }
 
@@ -741,23 +922,6 @@ function submitRegister() {
 .setting-icon {
   position: relative;
   top: 6px;
-}
-
-.github {
-  position: fixed;
-  width: 35px;
-  height: 35px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border-radius: 50%;
-  background: var(--el-bg-color);
-  bottom: 10px;
-  right: 10px;
-  z-index: 1000;
-  border: 1px solid var(--el-border-color-light);
-  box-shadow: var(--el-box-shadow-light);
-  cursor: pointer;
 }
 
 :deep(.el-input-group__append) {

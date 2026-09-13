@@ -9,6 +9,11 @@ import { parseHTML } from 'linkedom';
 import { v4 as uuidv4 } from 'uuid';
 import domainUtils from '../utils/domain-uitls';
 import settingService from "./setting-service";
+import BizError from '../error/biz-error';
+import { t } from '../i18n/i18n';
+
+// 正文内嵌图片的数量上限，与 email-service 的 SEND_LIMIT.INLINE_IMAGE_COUNT 一致
+const INLINE_IMAGE_MAX = 10;
 
 const attService = {
 
@@ -31,7 +36,21 @@ const attService = {
 
 		}
 
-		await orm(c).insert(att).values(attachments).run();
+		await this.insertAttList(c, attachments);
+	},
+
+	// D1 单条语句最多 100 个绑定参数，附件最多 15 列，按每批 6 行分片插入（6 * 15 = 90 < 100）
+	async insertAttList(c, attList) {
+
+		if (!attList || attList.length === 0) {
+			return;
+		}
+
+		const batchSize = 6;
+
+		for (let i = 0; i < attList.length; i += batchSize) {
+			await orm(c).insert(att).values(attList.slice(i, i + batchSize)).run();
+		}
 	},
 
 	list(c, params, userId) {
@@ -59,13 +78,23 @@ const attService = {
 
 		for (const img of images) {
 
+			// 数量上限必须在**本轮抓取之前**判断。
+			// 原来是在调用方等整个 toImageUrlHtml 跑完才数数量，而每一张站内图都要
+			// 去 KV/R2 取一次对象并读进内存 —— 正文里塞几百个 <img> 就能在检查到来之前
+			// 先完成几百次子请求和全量缓冲，把内存和子请求配额打满。
+			// 注意判断的是 imageDataList（只统计真正要转成附件的图），
+			// 所以正文里有大量外链图片的正常邮件不会被误伤。
+			if (imageDataList.length >= INLINE_IMAGE_MAX) {
+				throw new BizError(t('imageAttLimit'));
+			}
+
 			//邮件正文base64图片转cid附件
 			const src = img.getAttribute('src');
 			if (src && src.startsWith('data:image')) {
 				const file = fileUtils.base64ToFile(src);
 				const buff = await file.arrayBuffer();
 				const cid = uuidv4().replace(/-/g, '');
-				const key = constant.ATTACHMENT_PREFIX + await fileUtils.getBuffHash(buff) + fileUtils.getExtFileName(file.name);
+				const key = constant.ATTACHMENT_PREFIX + fileUtils.genObjectName() + fileUtils.getExtFileName(file.name);
 
 				img.setAttribute('src', 'cid:' + cid);
 
@@ -134,7 +163,8 @@ const attService = {
 			image.contentType = dbImage.mimeType;
 
 			const obj = await r2Service.getObj(c, image.key);
-			if (!obj) {
+			// 对象不存在时 service 会返回 404 Response
+			if (!obj || obj.status === 404) {
 				return;
 			}
 
@@ -152,7 +182,7 @@ const attService = {
 
 		for (let att of attList) {
 			att.buff = fileUtils.base64ToUint8Array(att.content);
-			att.key = constant.ATTACHMENT_PREFIX + await fileUtils.getBuffHash(att.buff) + fileUtils.getExtFileName(att.filename);
+			att.key = constant.ATTACHMENT_PREFIX + fileUtils.genObjectName() + fileUtils.getExtFileName(att.filename);
 			const attData = { userId, accountId, emailId };
 			attData.key = att.key;
 			attData.size = att.buff.length;
@@ -162,7 +192,7 @@ const attService = {
 			attDataList.push(attData);
 		}
 
-		await orm(c).insert(att).values(attDataList).run();
+		await this.insertAttList(c, attDataList);
 
 		for (let att of attList) {
 			await r2Service.putObj(c, att.key, att.buff, {
@@ -191,7 +221,7 @@ const attService = {
 			delete attData.buff;
 		}
 
-		await orm(c).insert(att).values(attDataList).run();
+		await this.insertAttList(c, attDataList);
 
 	},
 
@@ -214,31 +244,41 @@ const attService = {
 
 	async removeAttByField(c, fieldName, fieldValues) {
 
-		const sqlList = [];
+		// 每个 id 会生成 2 条语句，且 in 查询受 D1 100 个绑定参数限制，按每批 90 个 id 分片执行
+		const batchSize = 90;
 
-		fieldValues.forEach(value => {
+		const delKeyList = [];
 
-			sqlList.push(
+		for (let i = 0; i < fieldValues.length; i += batchSize) {
 
-				c.env.db.prepare(
-					`SELECT a.key, a.att_id
-						FROM attachments a
-							   JOIN (SELECT key
-									 FROM attachments
-									 GROUP BY key
-									 HAVING COUNT (*) = 1) t
-									ON a.key = t.key
-						WHERE a.${fieldName} = ?;`
-					).bind(value)
-			)
+			const values = fieldValues.slice(i, i + batchSize);
+			const sqlList = [];
 
-			sqlList.push(c.env.db.prepare(`DELETE FROM attachments WHERE ${fieldName} = ?`).bind(value))
+			values.forEach(value => {
 
-		});
+				sqlList.push(
 
-		const attListResult = await c.env.db.batch(sqlList);
+					c.env.db.prepare(
+						`SELECT a.key, a.att_id
+							FROM attachments a
+								   JOIN (SELECT key
+										 FROM attachments
+										 GROUP BY key
+										 HAVING COUNT (*) = 1) t
+										ON a.key = t.key
+							WHERE a.${fieldName} = ?;`
+						).bind(value)
+				)
 
-		const delKeyList = attListResult.flatMap(r => r.results ? r.results.map(row => row.key) : []);
+				sqlList.push(c.env.db.prepare(`DELETE FROM attachments WHERE ${fieldName} = ?`).bind(value))
+
+			});
+
+			const attListResult = await c.env.db.batch(sqlList);
+
+			delKeyList.push(...attListResult.flatMap(r => r.results ? r.results.map(row => row.key) : []));
+
+		}
 
 		if (delKeyList.length > 0) {
 			try {

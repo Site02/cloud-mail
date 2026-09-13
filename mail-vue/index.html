@@ -1,12 +1,25 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="theme-color" content="#F1F1F1" id="theme-color-meta">
-  <meta name="description" content="Cloud Mail 是一个 Serverless 响应式邮箱服务，支持邮件发送，可部署到 Cloudflare 平台，降低服务器成本。Cloud Mail is a serverless responsive email service that supports email sending and can be deployed on Cloudflare to reduce server costs.">
-  <title>Cloud Mail</title>
-  <link rel="icon" href="/public/mail.png" type="image/png">
+  <meta name="theme-color" content="#F1F3FA" id="theme-color-meta">
+  <meta name="description" content="Aurax Mail — 基于自有域名的邮箱服务">
+  <title>Aurax Mail</title>
+
+  <!--
+    邮件应用本体不参与收录。
+    这里只是登录后的功能界面，没有任何有搜索价值的内容；更实际的是，
+    放它进搜索引擎等于把「注册入口」直接交给全网爬虫 —— 那正是垃圾注册的来源。
+    对外可收录的说明页是 /about.html（它自己有 index,follow）。
+
+    注意这里是 noindex 而不是 nofollow：保留 follow，让搜索引擎还能顺着
+    页面里的链接发现介绍页。另外这一条也顺带消掉了「软 404」问题 ——
+    应用配的是 SPA 回退，任意不存在的路径都会返回 200，这正是搜索引擎的扣分项；
+    加上 noindex 后这些空壳页面不会再被当成正常页面收录。
+  -->
+  <meta name="robots" content="noindex, follow"/>
+  <link rel="icon" href="/mail.png" type="image/png">
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <script>
     const uiStoreStr =  localStorage.getItem('ui')
@@ -19,118 +32,147 @@
     }
     const metaTag = document.getElementById('theme-color-meta');
     const isMobile =  !window.matchMedia("(pointer: fine) and (hover: hover)").matches;
-    metaTag.setAttribute('content', isDark ? (isMobile ? '#141414' : '#000000') : (isMobile ? '#191A23' : '#F1F1F1'));
+    metaTag.setAttribute('content', isDark ? (isMobile ? '#0B0D14' : '#000000') : (isMobile ? '#191A23' : '#F1F3FA'));
   </script>
-</head>
-<style>
-  html {
-    background: #FFFFFF;
-  }
-  .dark {
-    background: #141414;
-  }
-  #loading-first {
-    position: fixed;
-    left: 0;
-    top: 0;
-    height: 100%;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 500;
-    background: var(--el-bg-color);
-  }
+  <style>
+    /* 首屏关键样式：在应用 bundle 加载前就要生效，所以不能依赖 glass.css。
+       下面的底色与色晕刻意和 glass.css 的 --glass-page-base / --glass-mesh 保持一致，
+       否则应用挂载后背景会「跳」一下。改 glass.css 的调色板时记得同步这里。 */
+    html {
+      background: #F1F3FA;
+    }
+    html.dark {
+      background: #0B0D14;
+    }
+    html::before {
+      content: "";
+      position: fixed;
+      /* 往外多留一圈：3D 视差会让这层随鼠标平移最多 18px，
+         inset 正好等于 0 时会在反方向露出没画光晕的空白边。 */
+      inset: -24px;
+      z-index: -1;
+      pointer-events: none;
+      background-repeat: no-repeat;
+      background-size: cover;
+      /* 只保留「蓝→靛蓝→紫」这一个相邻色系（色相跨度约 40°）。
+         之前用了蓝/紫/青/粉四个色相、跨度约 140°，那是四个色系硬凑，
+         所以显得杂、不搭。相邻色系才读得出「协调」。
+         三个光晕之间靠明度和大小拉开层次，而不是靠加新色相。 */
+      background-image:
+        radial-gradient(1100px 720px at 10% -12%, rgba(76, 110, 245, 0.30), transparent 62%),
+        radial-gradient(900px 640px at 96% 0%, rgba(121, 80, 242, 0.24), transparent 60%),
+        radial-gradient(820px 700px at 78% 100%, rgba(59, 130, 246, 0.20), transparent 62%);
+    }
+    html.dark::before {
+      background-image:
+        radial-gradient(1100px 720px at 10% -12%, rgba(76, 110, 245, 0.22), transparent 62%),
+        radial-gradient(900px 640px at 96% 0%, rgba(121, 80, 242, 0.18), transparent 60%),
+        radial-gradient(820px 700px at 78% 100%, rgba(59, 130, 246, 0.14), transparent 62%);
+    }
 
-  .loading-hide {
-    pointer-events: none;
-    opacity: 0;
-  }
+    #loading-first {
+      position: fixed;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 500;
+      background: var(--el-bg-color, transparent);
+    }
 
-  .loading-icon {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-  }
+    .loading-hide {
+      pointer-events: none;
+      opacity: 0;
+    }
 
-  .loading-image {
-    width: 70px;
-    height: 70px;
-    object-fit: contain;
-  }
+    .loading-icon {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+    }
 
-  .loading-progress {
-    position: relative;
-    width: 64px;
-    height: 4px;
-    overflow: hidden;
-    border-radius: 999px;
-    background: rgba(64, 158, 255, 0.18);
-  }
+    .loading-image {
+      width: 70px;
+      height: 70px;
+      object-fit: contain;
+    }
 
-  .loading-progress::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    border-radius: inherit;
-    background: #409EFF;
-    transform: scaleX(0);
-    transform-origin: left center;
-    animation: loading-progress-grow 2.4s linear forwards;
-  }
+    .loading-progress {
+      position: relative;
+      width: 64px;
+      height: 4px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(64, 158, 255, 0.18);
+    }
 
-  .loading-progress::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    width: 24px;
-    height: 100%;
-    border-radius: inherit;
-    background: rgba(64, 158, 255, 0.45);
-    filter: blur(4px);
-    transform: translateX(-24px);
-    animation: loading-progress-peg 2.4s linear forwards;
-  }
-
-  .loading-complete .loading-progress::before {
-    animation: none;
-    transform: scaleX(1);
-    transition: transform 200ms linear;
-  }
-
-  .loading-complete .loading-progress::after {
-    animation: none;
-    transform: translateX(60px);
-    transition: transform 200ms linear;
-  }
-
-  @keyframes loading-progress-grow {
-    0% {
+    .loading-progress::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      background: #409EFF;
       transform: scaleX(0);
+      transform-origin: left center;
+      animation: loading-progress-grow 2.4s linear forwards;
     }
-    100% {
-      transform: scaleX(1);
-    }
-  }
 
-  @keyframes loading-progress-peg {
-    0% {
+    .loading-progress::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      width: 24px;
+      height: 100%;
+      border-radius: inherit;
+      background: rgba(64, 158, 255, 0.45);
+      filter: blur(4px);
       transform: translateX(-24px);
+      animation: loading-progress-peg 2.4s linear forwards;
     }
-    100% {
+
+    .loading-complete .loading-progress::before {
+      animation: none;
+      transform: scaleX(1);
+      transition: transform 200ms linear;
+    }
+
+    .loading-complete .loading-progress::after {
+      animation: none;
       transform: translateX(60px);
+      transition: transform 200ms linear;
     }
-  }
-</style>
+
+    @keyframes loading-progress-grow {
+      0% {
+        transform: scaleX(0);
+      }
+      100% {
+        transform: scaleX(1);
+      }
+    }
+
+    @keyframes loading-progress-peg {
+      0% {
+        transform: translateX(-24px);
+      }
+      100% {
+        transform: translateX(60px);
+      }
+    }
+  </style>
+</head>
 <body>
-<div id="loading-first" >
+<div id="loading-first">
   <div class="loading-icon">
-    <img class="loading-image" src="/mail-pwa.png" alt="Cloud Mail">
+    <img class="loading-image" src="/mail-pwa.png" alt="Aurax Mail">
     <div class="loading-progress" aria-hidden="true"></div>
   </div>
 </div>

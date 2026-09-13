@@ -1,15 +1,24 @@
 import settingService from '../service/setting-service';
 import emailUtils from '../utils/email-utils';
 import {emailConst} from "../const/entity-const";
+import limitUtils from '../utils/limit-utils';
+import reqUtils from '../utils/req-utils';
 
 const dbInit = {
 	async init(c) {
 
 		const secret = c.req.param('secret');
+		const ip = reqUtils.getIp(c);
+
+		// 防暴力破解:该接口未鉴权,按 IP 计数锁定
+		await limitUtils.assertNotLocked(c, 'init:ip', ip);
 
 		if (secret !== c.env.jwt_secret) {
+			await limitUtils.recordFail(c, 'init:ip', ip);
 			return c.text('❌ JWT secret mismatch');
 		}
+
+		await limitUtils.clear(c, 'init:ip', ip);
 
 		await this.intDB(c);
 		await this.v1_1DB(c);
@@ -280,7 +289,7 @@ const dbInit = {
 				type INTEGER NOT NULL DEFAULT 0,
 				update_time DATETIME DEFAULT CURRENT_TIMESTAMP
       )`,
-			`ALTER TABLE setting ADD COLUMN notice_title TEXT NOT NULL DEFAULT 'Cloud Mail';`,
+			`ALTER TABLE setting ADD COLUMN notice_title TEXT NOT NULL DEFAULT 'Aurax Mail';`,
 			`ALTER TABLE setting ADD COLUMN notice_content TEXT NOT NULL DEFAULT '';`,
 			`ALTER TABLE setting ADD COLUMN notice_type TEXT NOT NULL DEFAULT 'none';`,
 			`ALTER TABLE setting ADD COLUMN notice_duration INTEGER NOT NULL DEFAULT 0;`,
@@ -687,7 +696,7 @@ const dbInit = {
 			  INSERT INTO setting (
 				register, receive, add_email, many_email, title, auto_refresh, register_verify, add_email_verify
 			  )
-			  SELECT 0, 0, 0, 0, 'Cloud Mail', 0, 1, 1
+			  SELECT 0, 0, 0, 0, 'Aurax Mail', 0, 1, 1
 			  WHERE NOT EXISTS (SELECT 1 FROM setting)
 			`).run();
 		} catch (e) {

@@ -34,7 +34,7 @@
         <el-table-column :label="$t('tabSetting')" :width="settingWidth">
           <template #default="props">
             <el-dropdown trigger="click">
-              <el-button size="small" type="primary">{{ $t('action') }}</el-button>
+              <el-button size="small" text type="primary">{{ $t('action') }}</el-button>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item @click="openRoleSet(props.row)">{{ $t('change') }}</el-dropdown-item>
@@ -144,7 +144,7 @@
 </template>
 <script setup>
 import {Icon} from "@iconify/vue";
-import {defineOptions, nextTick, reactive, ref} from "vue";
+import {defineOptions, nextTick, onActivated, onDeactivated, onUnmounted, reactive, ref} from "vue";
 import {roleAdd, roleDelete, rolePermTree, roleRoleList, roleSet, roleSetDef} from "@/request/role.js";
 import loading from '@/components/loading/index.vue';
 import {useRoleStore} from "@/store/role.js";
@@ -408,9 +408,23 @@ function adjustWidth() {
 
 adjustWidth()
 
-window.onresize = () => {
+function handleResize() {
   adjustWidth()
-};
+}
+
+window.addEventListener('resize', handleResize)
+
+onActivated(() => {
+  window.addEventListener('resize', handleResize)
+})
+
+onDeactivated(() => {
+  window.removeEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+})
 
 
 </script>

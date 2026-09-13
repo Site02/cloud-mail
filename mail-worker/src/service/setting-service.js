@@ -10,6 +10,7 @@ import {t} from '../i18n/i18n'
 import verifyRecordService from './verify-record-service';
 import userContext from '../security/user-context';
 import domainUtils from '../utils/domain-uitls';
+import eciesUtils from '../utils/crypto-ecies';
 
 const settingService = {
 
@@ -68,11 +69,13 @@ const settingService = {
 
 	async get(c, showSiteKey = false) {
 
-		const [settingRow, recordList] = await Promise.all([
+		const [settingData, recordList] = await Promise.all([
 			await this.query(c),
 			verifyRecordService.selectListByIP(c)
 		]);
 
+		// 返回浅拷贝再脱敏,避免直接改动 c.get('setting') / KV 中的共享配置对象
+		const settingRow = { ...settingData, resendTokens: { ...settingData.resendTokens } };
 
 		if (!showSiteKey) {
 			settingRow.siteKey = settingRow.siteKey ? `${settingRow.siteKey.slice(0, 6)}******` : null;
@@ -193,7 +196,12 @@ const settingService = {
 		const settingRow = await this.get(c, true);
 		const token = await userContext.getToken(c);
 
+		// 登录密码的应用层加密：前端拿这个公钥加密后再提交。
+		// 未配置 login_private_key 时返回 null，前端自动按明文提交（向后兼容）。
+		const loginPubKey = await eciesUtils.publicKeyBase64(c);
+
 		return {
+			loginPubKey,
 			register: settingRow.register,
 			title: settingRow.title,
 			manyEmail: settingRow.manyEmail,

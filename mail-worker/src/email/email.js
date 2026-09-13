@@ -13,6 +13,9 @@ import telegramService from '../service/telegram-service';
 import aiService from '../service/ai-service';
 import webhookService from '../service/webhook-service';
 
+// 单封邮件附件数量上限，超限直接拒收
+const MAX_ATTACHMENT_COUNT = 100;
+
 export async function email(message, env, ctx) {
 
 	try {
@@ -62,13 +65,26 @@ export async function email(message, env, ctx) {
 			return;
 		}
 
-		let account = await accountService.selectByEmailIncludeDel({ env: env }, message.to);
+		// 别名投递顺序：带 `+` 的收件人**优先投给基础地址**。
+		//
+		// 顺序在这里是安全性质，不是风格问题：
+		// 若先按完整地址精确匹配，任何人只要抢先注册 `别人+标签@域名`，
+		// 就能截走发往该别名的邮件 —— 而 `+标签` 正是很多服务区分注册来源的
+		// 常规写法（victim+github@、victim+paypal@），抢注一批即可持续截信。
+		// 优先投基础地址后，别名始终回到真正的拥有者手里，**存量被抢注的别名也一并失效**。
+		//
+		// 正常语义下 `名字+标签@域名` 本来就该投给 `名字@域名`，所以这不改变
+		// 别名的预期行为，只是在"恰好存在同名带 + 账号"时不再被它劫走。
+		const baseEmail = emailUtils.getBaseEmail(message.to);
+
+		let account = null;
+
+		if (baseEmail && baseEmail !== message.to) {
+			account = await accountService.selectByEmailIncludeDel({ env: env }, baseEmail);
+		}
 
 		if (!account) {
-			const baseEmail = emailUtils.getBaseEmail(message.to);
-			if (baseEmail && baseEmail !== message.to) {
-				account = await accountService.selectByEmailIncludeDel({ env: env }, baseEmail);
-			}
+			account = await accountService.selectByEmailIncludeDel({ env: env }, message.to);
 		}
 
 		if (!account && noRecipient === settingConst.noRecipient.CLOSE) {
@@ -130,9 +146,16 @@ export async function email(message, env, ctx) {
 		const attachments = [];
 		const cidAttachments = [];
 
+		// 附件数量上限校验：超限明确拒收，避免后续入库失败导致附件静默丢失
+		if (email.attachments.length > MAX_ATTACHMENT_COUNT) {
+			console.error(`附件数量超限：${email.attachments.length}，最多 ${MAX_ATTACHMENT_COUNT}`);
+			message.setReject('Too many attachments');
+			return;
+		}
+
 		for (let item of email.attachments) {
 			let attachment = { ...item };
-			attachment.key = constant.ATTACHMENT_PREFIX + await fileUtils.getBuffHash(attachment.content) + fileUtils.getExtFileName(item.filename);
+			attachment.key = constant.ATTACHMENT_PREFIX + fileUtils.genObjectName() + fileUtils.getExtFileName(item.filename);
 			attachment.size = item.content.length ?? item.content.byteLength;
 			attachments.push(attachment);
 			if (attachment.contentId) {
@@ -153,7 +176,8 @@ export async function email(message, env, ctx) {
 				await attService.addAtt({ env }, attachments);
 			}
 		} catch (e) {
-			console.error(e);
+			// 不再静默吞异常：记录明确的错误信息便于定位附件丢失
+			console.error(`保存附件失败（emailId=${emailRow.emailId}，附件数=${attachments.length}）：`, e);
 		}
 
 		emailRow = await emailService.completeReceive({ env }, account ? emailConst.status.RECEIVE : emailConst.status.NOONE, emailRow.emailId);

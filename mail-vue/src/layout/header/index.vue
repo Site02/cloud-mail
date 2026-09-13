@@ -19,6 +19,9 @@
       <div class="notice icon-item" @click="openNotice">
         <Icon icon="streamline-plump:announcement-megaphone"/>
       </div>
+      <div class="lang-item icon-item" @click="toggleLang" :title="settingStore.lang === 'en' ? '切换到中文' : 'Switch to English'">
+        {{ settingStore.lang === 'en' ? '中文' : 'EN' }}
+      </div>
       <el-dropdown ref="userinfoRef" @visible-change="e => userInfoShow = e" :teleported="false" popper-class="detail-dropdown">
         <div class="avatar" @click="userInfoHide" >
           <div class="avatar-text">
@@ -73,7 +76,6 @@
 </template>
 
 <script setup>
-import router from "@/router";
 import hanburger from '@/components/hamburger/index.vue'
 import {logout} from "@/request/login.js";
 import {Icon} from "@iconify/vue";
@@ -84,7 +86,7 @@ import {computed, ref} from "vue";
 import {useSettingStore} from "@/store/setting.js";
 import {hasPerm} from "@/perm/perm.js"
 import {useI18n} from "vue-i18n";
-import {setExtend} from "@/utils/day.js"
+import {toggleLang} from "@/utils/lang.js"
 
 const {t} = useI18n();
 const route = useRoute();
@@ -182,11 +184,6 @@ async function copyEmail(email) {
   }
 }
 
-function changeLang(lang) {
-  setExtend(lang === 'en' ? 'en' : 'zh-cn')
-  settingStore.lang = lang
-}
-
 function openNotice() {
   uiStore.showNotice()
 }
@@ -244,7 +241,11 @@ function clickLogout() {
   logoutLoading.value = true
   logout().then(() => {
     localStorage.removeItem("token")
-    router.replace('/login')
+    // 清除持久化的业务数据，避免换账号登录后残留上一个账号的邮件正文/收件人记录
+    localStorage.removeItem("email")
+    localStorage.removeItem("writer")
+    // 整页刷新：重置内存中的 store 与 init() 动态添加的权限路由
+    location.replace(import.meta.env.BASE_URL + 'login')
   }).finally(() => {
     logoutLoading.value = false
   })
@@ -436,6 +437,13 @@ function formatName(email) {
   .notice {
     font-size: 22px;
     margin-right: 4px;
+  }
+
+  .lang-item {
+    font-size: 12px;
+    font-weight: 600;
+    user-select: none;
+    letter-spacing: 0.3px;
   }
 
   .dark-icon {
