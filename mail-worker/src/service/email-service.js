@@ -508,26 +508,53 @@ const emailService = {
 		};
 	},
 
-	async sendByResend(resendToken, params) {
-		const resend = new Resend(resendToken);
-
-		const sendForm = {
-			from: `${params.name} <${params.accountEmail}>`,
-			to: [...params.receiveEmail],
-			subject: params.subject,
-			text: params.text,
-			html: params.html,
-			attachments: await this.toResendAttachments(params.attachments)
-		};
-
-		if (params.sendType === 'reply') {
-			sendForm.headers = {
-				'in-reply-to': params.messageId,
-				'references': params.messageId
-			};
+async sendByResend(resendToken, params) {
+		// --- 替换为 Zoho (ZeptoMail) 发信逻辑 ---
+		
+		// 1. 将收件人列表转换为 Zoho 格式
+		const zohoTo = [];
+		if (params.receiveEmail && params.receiveEmail.length > 0) {
+			for (const email of params.receiveEmail) {
+				zohoTo.push({ email_address: { address: email, name: "" } });
+			}
 		}
 
-		return await resend.emails.send(sendForm);
+		// 2. 组装 Zoho Payload
+		const zohoPayload = {
+			from: { address: params.accountEmail },
+			to: zohoTo,
+			subject: params.subject || "No Subject",
+			htmlbody: params.html || params.text || ""
+		};
+
+		// 3. 构建请求头
+		const zohoHeaders = new Headers({
+			"Accept": "application/json",
+			"Content-Type": "application/json",
+			// resendToken 这里实际传入的是你在 Cloudflare 配置的 ZOHO 密钥
+			"Authorization": "Zoho-enczapikey " + resendToken
+		});
+
+		// 4. 发起请求
+		try {
+			const response = await fetch("https://cpaas.zoho.com/v1.1/email", {
+				method: "POST",
+				body: JSON.stringify(zohoPayload),
+				headers: zohoHeaders
+			});
+			
+			const data = await response.json();
+			
+			// 如果 Zoho 返回错误
+			if (!response.ok || data.error) {
+				return { data: null, error: new Error(data.message || data.error?.message || "Zoho API Error") };
+			}
+			
+			// 返回成功数据 (需模拟 resend 的格式以防止主流程报错)
+			return { data: { id: data.data?.[0]?.message_id || "zoho_sent" }, error: null };
+		} catch (error) {
+			return { data: null, error: error };
+		}
 	},
 
 	async toCloudflareAttachments(attachments) {
