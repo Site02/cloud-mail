@@ -22,8 +22,6 @@
 
       <div class="header-right">
         <span class="email-count" v-if="total">{{ $t('emailCount', {total: total}) }}</span>
-        <Icon v-if="showAccountIcon" class="more-icon icon" width="16" height="16" icon="akar-icons:dot-grid-fill"
-              @click="changeAccountShow"/>
       </div>
     </div>
 
@@ -40,6 +38,7 @@
           <template #default="{ data: item, index }" >
             <div :class="['email-row', props.type, { 'right-checked': item.rightChecked }]"
                  :data-checked="item.checked"
+                 :data-unread="item.unread === EmailUnreadEnum.UNREAD && showUnread"
                  @click="jumpDetails(item)"
                  v-if="!item.expand"
                  :key="item.emailId"
@@ -54,6 +53,7 @@
                 <Icon v-else icon="solar:star-line-duotone" width="18" height="18"/>
               </div>
               <div v-if="!showStar"></div>
+              <div class="mail-avatar" :class="'tone-' + (item.avatarTone || 0)">{{ item.avatarText }}</div>
               <div class="title" :class="accountShow ? 'title-column' : 'title-column'">
 
                 <div class="email-sender" :style=" (showStatus ? 'gap: 10px;' : '') + ((item.unread === EmailUnreadEnum.UNREAD && showUnread)  ? 'font-weight: bold' : '')">
@@ -239,10 +239,12 @@ import {Icon} from "@iconify/vue";
 import skeletonBlock from "@/components/email-scroll/skeleton/index.vue"
 import {computed, onActivated, reactive, ref, watch, nextTick, onMounted, onUnmounted } from "vue";
 import {useEmailStore} from "@/store/email.js";
+import {useWriterStore} from "@/store/writer.js";
 import {useUiStore} from "@/store/ui.js";
 import {useSettingStore} from "@/store/setting.js";
 import {sleep} from "@/utils/time-utils.js"
 import {fromNow} from "@/utils/day.js";
+import {avatarInitial, avatarTone} from "@/utils/avatar.js";
 import {useI18n} from "vue-i18n";
 import {EmailUnreadEnum} from "@/enums/email-enum.js";
 import { UseVirtualList } from '@vueuse/components'
@@ -303,6 +305,7 @@ const {t} = useI18n()
 const settingStore = useSettingStore()
 const uiStore = useUiStore();
 const emailStore = useEmailStore();
+const writerStore = useWriterStore();
 const loading = ref(false);
 const followLoading = ref(false);
 const noLoading = ref(false);
@@ -398,9 +401,9 @@ const list = computed(() => {
 
 const itemHeight = computed(() => {
     if (props.type === 'all-email') {
-      return isMobile.value ? 132 : 65;
+      return isMobile.value ? 136 : 72;
     } else  {
-      return isMobile.value ? 83 : 48;
+      return isMobile.value ? 88 : 56;
     }
 })
 
@@ -492,13 +495,13 @@ window.addEventListener('wheel', (event) => {
 function openReply(email) {
   const fullEmail = emailStore.detailMap[email.emailId]
   if (!fullEmail) return
-  uiStore.writerRef.openReply(fullEmail)
+  writerStore.startReply(fullEmail)
 }
 
 function openForward(email) {
   const fullEmail = emailStore.detailMap[email.emailId]
   if (!fullEmail) return
-  uiStore.writerRef.openForward(fullEmail)
+  writerStore.startForward(fullEmail)
 }
 
 function visibleChange(e) {
@@ -583,10 +586,6 @@ function starChange(email) {
       email.isStar = 1;
     })
   }
-}
-
-function changeAccountShow() {
-  uiStore.accountShow = !uiStore.accountShow;
 }
 
 const handleRead = () => {
@@ -877,6 +876,8 @@ function handleList(list) {
       email.isDelContent = t('selectDeleted');
     }
     email.statusIcon = statusIconMap[email.status];
+    email.avatarText = avatarInitial(email.name || email.sendEmail)
+    email.avatarTone = avatarTone(email.name || email.sendEmail)
   })
 }
 
@@ -970,16 +971,17 @@ function loadData() {
 
 :deep(.email-row) {
   display: flex;
-  padding: 8px 0;
+  padding: 0 14px 0 0;
   justify-content: space-between;
   box-shadow: var(--header-actions-border);
   cursor: pointer;
   align-items: center;
   position: relative;
-  transition: background 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-  height: 48px;
+  transition: background 0.12s ease;
+  height: 56px;
+  background: var(--mail-read-bg);
   @media (max-width: 1366px) {
-    height: 83px;
+    height: 88px;
   }
 
   @media (pointer: coarse) {
@@ -987,9 +989,9 @@ function loadData() {
     user-select: none;
   }
   &.all-email {
-    height: 65px;
+    height: 72px;
     @media (max-width: 1366px) {
-      height: 132px;
+      height: 136px;
     }
   }
   .user-info {
@@ -1030,15 +1032,15 @@ function loadData() {
 
   .checkbox {
     display: flex;
-    padding-left: 15px;
-    padding-right: 20px;
+    padding-left: 18px;
+    padding-right: 4px;
     justify-content: center;
   }
 
   .all-email-checkbox {
     display: flex;
-    padding-left: 15px;
-    padding-right: 20px;
+    padding-left: 18px;
+    padding-right: 4px;
     justify-content: center;
     @media (min-width: 1367px) {
       justify-content: start;
@@ -1058,7 +1060,8 @@ function loadData() {
   .title {
     flex: 1;
     display: grid;
-    grid-template-columns: 240px 1fr;
+    grid-template-columns: 170px 1fr;
+    column-gap: 12px;
     @media (max-width: 1366px) {
       padding-right: 15px;
     }
@@ -1069,6 +1072,7 @@ function loadData() {
 
     .email-sender {
       color: var(--el-text-color-primary);
+      font-size: 14px;
       display: grid;
       grid-template-columns: auto 1fr auto;
 
@@ -1191,6 +1195,7 @@ function loadData() {
         white-space: nowrap;
         text-overflow: ellipsis;
         padding-left: 10px;
+        font-size: 13px;
         color: var(--email-scroll-content-color);
         @media (max-width: 1366px) {
           padding-left: 0;
@@ -1206,8 +1211,11 @@ function loadData() {
     font-size: 12px;
     white-space: nowrap;
     display: flex;
-    padding-left: 15px;
+    padding-left: 12px;
+    min-width: 76px;
+    justify-content: flex-end;
     align-items: center;
+    color: var(--secondary-text-color);
     @media (max-width: 1366px) {
       display: none;
     }
@@ -1217,6 +1225,18 @@ function loadData() {
     @media (max-width: 1366px) {
       display: none;
     }
+  }
+
+  /* 未读比已读更亮一点，跟 Gmail 一致（暗色下反过来是更浅的底色） */
+  &[data-unread="true"] {
+    background: var(--mail-unread-bg);
+  }
+
+  .mail-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+    margin-right: 14px;
   }
 
   &:hover {
@@ -1241,7 +1261,8 @@ function loadData() {
 
 .pc-star {
   display: flex;
-  width: 40px;
+  width: 30px;
+  color: var(--dark-border);
 }
 
 @media (max-width: 1366px) {
@@ -1271,16 +1292,18 @@ function loadData() {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: 15px;
-  padding: 3px 15px;
+  gap: 12px;
+  height: 44px;
+  padding: 0 14px 0 18px;
   box-shadow: var(--header-actions-border);
+  color: var(--regular-text-color);
 
   .header-left {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     position: relative;
-    column-gap: 20px;
+    column-gap: 16px;
     row-gap: 8px;
     padding-left: 2px;
     color: var(--el-text-color-primary);;
@@ -1288,25 +1311,31 @@ function loadData() {
 
   .header-right {
     display: grid;
-    grid-template-columns: auto auto;
-    align-items: start;
+    grid-template-columns: auto;
+    align-items: center;
     height: 100%;
     color: var(--el-text-color-primary);;
 
     .email-count {
       white-space: nowrap;
-      margin-top: 6px;
+      font-size: 12px;
+      color: var(--secondary-text-color);
     }
   }
 
   .icon {
     font-size: 18px;
     cursor: pointer;
+    transition: color 0.15s ease;
+  }
+
+  .icon:hover {
+    color: var(--el-color-primary);
   }
 
   .more-icon {
-    margin-top: 8px;
-    margin-left: 15px;
+    margin-left: 14px;
+    color: var(--regular-text-color);
   }
 }
 

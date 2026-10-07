@@ -1,4 +1,8 @@
 const zh = {
+    compose: '写邮件',
+    quotaSend: '邮件发送',
+    quotaAccount: '邮箱添加',
+    quotaRole: '身份',
     inbox: '收件箱',
     drafts: '草稿箱',
     sent: '已发送',
