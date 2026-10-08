@@ -48,9 +48,13 @@ const jwtUtils = {
 
 	async verifyToken(c, token) {
 		try {
-			const [headerB64, payloadB64, signatureB64] = token.split('.');
+			const parts = token.split('.');
+			if (parts.length !== 3) return null;
+			const [headerB64, payloadB64, signatureB64] = parts;
 
 			if (!headerB64 || !payloadB64 || !signatureB64) return null;
+			const header = JSON.parse(decoder.decode(base64urlDecode(headerB64)));
+			if (header.alg !== 'HS256' || header.typ !== 'JWT') return null;
 
 			const data = `${headerB64}.${payloadB64}`;
 			const key = await crypto.subtle.importKey(
@@ -74,7 +78,7 @@ const jwtUtils = {
 			const payload = JSON.parse(payloadJson);
 
 			const now = Math.floor(Date.now() / 1000);
-			if (payload.exp && payload.exp < now) return null;
+			if (!Number.isSafeInteger(payload.exp) || payload.exp <= now) return null;
 
 			return payload;
 

@@ -7,7 +7,7 @@ const turnstileService = {
 	async verify(c, token) {
 
 		if (!token) {
-			throw new BizError(t('emptyBotToken'),400);
+			throw new BizError(t(c, 'emptyBotToken'),400);
 		}
 
 		const settingRow = await settingService.query(c)
@@ -27,7 +27,7 @@ const turnstileService = {
 		const result = await res.json();
 
 		if (!result.success) {
-			throw new BizError(t('botVerifyFail'),400)
+			throw new BizError(t(c, 'botVerifyFail'),400)
 		}
 	}
 };

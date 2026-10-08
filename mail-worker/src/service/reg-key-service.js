@@ -14,26 +14,26 @@ const regKeyService = {
 		let {code,roleId,count,expireTime} = params;
 
 		if (!code) {
-			throw new BizError(t('emptyRegKey'));
+			throw new BizError(t(c, 'emptyRegKey'));
 		}
 
 		if (!count) {
-			throw new BizError(t('emptyRegKey'));
+			throw new BizError(t(c, 'emptyRegKey'));
 		}
 
 		if (!expireTime) {
-			throw new BizError(t('emptyRegKeyExpire'));
+			throw new BizError(t(c, 'emptyRegKeyExpire'));
 		}
 
 		const regKeyRow = await orm(c).select().from(regKey).where(eq(regKey.code, code)).get();
 
 		if (regKeyRow) {
-			throw new BizError(t('isExistRegKye'));
+			throw new BizError(t(c, 'isExistRegKye'));
 		}
 
 		const roleRow = roleService.selectById(c, roleId);
 		if (!roleRow) {
-			throw new BizError(t('roleNotExist'));
+			throw new BizError(t(c, 'roleNotExist'));
 		}
 
 		expireTime = formatDetailDate(expireTime)

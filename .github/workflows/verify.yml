@@ -1,0 +1,48 @@
+name: Verify mail application
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4.1.0
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: |
+            mail-vue/pnpm-lock.yaml
+            mail-worker/pnpm-lock.yaml
+      - name: Install application dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: mail-vue
+      - name: Install server dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: mail-worker
+      - name: Verify application and languages
+        run: pnpm test && pnpm run check:manifests
+        working-directory: mail-vue
+      - name: Verify server and language responses
+        run: pnpm test
+        working-directory: mail-worker
+      - name: Build application
+        run: pnpm run build
+        working-directory: mail-vue
+      - name: Prepare browser checks
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: mail-vue
+      - name: Verify mail entry points and recovery
+        run: pnpm run check:mail-flows
+        working-directory: mail-vue
+      - name: Validate deployment bundle
+        run: pnpm exec wrangler deploy --dry-run
+        working-directory: mail-worker

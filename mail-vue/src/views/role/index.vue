@@ -18,7 +18,7 @@
         <el-table-column :label="$t('role')" prop="name" :min-width="roleWidth">
           <template #default="props">
             <div class="role-name">
-              <span>{{ props.row.name }}</span>
+              <span>{{ displayRoleName(props.row, t) }}</span>
               <span v-if="props.row.isDefault"><el-tag class="def-tag">{{ $t('default') }}</el-tag></span>
             </div>
           </template>
@@ -27,7 +27,7 @@
         <el-table-column v-if="desShow" :label="$t('description')" min-width="200" prop="description">
           <template #default="props">
             <div class="description">
-              <span>{{ props.row.description }}</span>
+              <span>{{ displayRoleDescription(props.row, t) }}</span>
             </div>
           </template>
         </el-table-column>
@@ -49,7 +49,7 @@
     </el-scrollbar>
     <el-dialog top="5vh" class="dialog" v-model="roleFormShow" @closed="resetForm">
       <template #header>
-        <span style="font-size: 18px">{{ dialogType.title }}</span>
+        <span style="font-size: 18px">{{ t(dialogType.type === 'set' ? 'changeRoleTitle' : 'addRoleTitle') }}</span>
         <el-popover
             width="340"
             :title="t('featDesc')"
@@ -67,9 +67,23 @@
         </el-popover>
       </template>
       <div class="dialog-box">
-        <el-input class="dialog-input" v-model="form.name" type="text" :maxlength="12" :placeholder="$t('roleName')"
+        <div v-if="dialogType.type === 'set' && isBuiltInRoleName(chooseRole) && !editStoredRoleName"
+             class="dialog-input stored-text-preview">
+          <span>{{ displayRoleName(chooseRole, t) }}</span>
+          <el-button text type="primary" :aria-label="`${t('change')} ${t('roleName')}`"
+                     @click="editStoredRoleName = true">{{ t('change') }}</el-button>
+        </div>
+        <el-input v-else class="dialog-input" v-model="form.name" type="text" :maxlength="12" :placeholder="$t('roleName')"
+                  :aria-label="t('roleName')"
                   autocomplete="off" @keyup.enter="roleFormClick"/>
-        <el-input class="dialog-input" v-model="form.description" :maxlength="30" type="text"
+        <div v-if="dialogType.type === 'set' && isBuiltInRoleDescription(chooseRole) && !editStoredRoleDescription"
+             class="dialog-input stored-text-preview">
+          <span>{{ displayRoleDescription(chooseRole, t) }}</span>
+          <el-button text type="primary" :aria-label="`${t('change')} ${t('description')}`"
+                     @click="editStoredRoleDescription = true">{{ t('change') }}</el-button>
+        </div>
+        <el-input v-else class="dialog-input" v-model="form.description" :maxlength="30" type="text"
+                  :aria-label="t('description')"
                   :placeholder="$t('description')" autocomplete="off" @keyup.enter="roleFormClick"/>
         <el-input-tag class="dialog-input" tag-type="warning" v-model="form.banEmail"
                       @add-tag="banEmailAddTag" type="text" :placeholder="$t('emailInterception')" autocomplete="off"/>
@@ -105,6 +119,7 @@
             :check-on-click-node="false"
             ref="tree"
             :data="treeList"
+            :aria-busy="treeLoading"
             show-checkbox
             node-key="permId"
             :default-expand-all="expand"
@@ -119,8 +134,8 @@
                 <el-input-number v-if="form.sendType === 'day' || form.sendType === 'count'" v-model="form.sendCount" controls-position="right" :min="0" :max="99999" size="small"
                                  :placeholder="$t('total')">
                 </el-input-number>
-                  <el-select v-model="form.sendType" placeholder="Select" size="small"
-                             :style="`width: ${ locale === 'zh' ? 65 : 85 }px;margin-left: 5px;`">
+                  <el-select v-model="form.sendType" :placeholder="$t('select')" size="small"
+                             class="send-type-select">
                     <el-option :label="$t('total')" value="count"/>
                     <el-option :label="$t('daily')" value="day"/>
                     <el-option :label="$t('internal')" value="internal"/>
@@ -135,7 +150,12 @@
             </div>
           </template>
         </el-tree>
-        <el-button class="btn" type="primary" :loading="permLoading" @click="roleFormClick"
+        <div v-if="!treeReady && !treeLoading" class="tree-retry" role="alert">
+          <span>{{ t('permissionTreeLoadFailed') }}</span>
+          <el-button type="primary" text @click="loadPermissionTree">{{ t('pwa.retry') }}</el-button>
+        </div>
+        <el-button class="btn" type="primary" :loading="permLoading || treeLoading" :disabled="!treeReady"
+                   @click="roleFormClick"
         >{{ $t('save') }}
         </el-button>
       </div>
@@ -144,7 +164,7 @@
 </template>
 <script setup>
 import {Icon} from "@iconify/vue";
-import {defineOptions, nextTick, reactive, ref} from "vue";
+import {defineOptions, nextTick, onBeforeUnmount, reactive, ref, watch} from "vue";
 import {roleAdd, roleDelete, rolePermTree, roleRoleList, roleSet, roleSetDef} from "@/request/role.js";
 import loading from '@/components/loading/index.vue';
 import {useRoleStore} from "@/store/role.js";
@@ -152,6 +172,7 @@ import {useUserStore} from "@/store/user.js";
 import {useSettingStore} from "@/store/setting.js";
 import {isEmail, isDomain} from "@/utils/verify-utils.js";
 import {useI18n} from "vue-i18n";
+import {displayRoleName, displayRoleDescription, isBuiltInRoleName, isBuiltInRoleDescription} from '@/i18n/system-defaults.js';
 
 defineOptions({
   name: 'role'
@@ -162,10 +183,14 @@ const {t, locale} = useI18n();
 const userStore = useUserStore();
 const roleStore = useRoleStore();
 const roleFormShow = ref(false)
+const editStoredRoleName = ref(false)
+const editStoredRoleDescription = ref(false)
 const treeList = reactive([])
 const roles = ref([])
 const tree = ref({})
 const permLoading = ref(false)
+const treeLoading = ref(false)
+const treeReady = ref(false)
 const tableLoading = ref(false)
 const desShow = ref(true)
 const settingWidth = ref(null)
@@ -173,10 +198,7 @@ const sortWidth = ref(null)
 const roleWidth = ref(200)
 const first = ref(true)
 
-const dialogType = reactive({
-  title: '',
-  type: ''
-})
+const dialogType = reactive({type: ''})
 
 const form = reactive({
   name: null,
@@ -196,11 +218,53 @@ const expand = ref(false)
 
 let chooseRole = {}
 
-refresh()
+let permissionTreeRevision = 0
 
-rolePermTree().then(tree => {
-  treeList.push(...tree)
-})
+function permissionIds(nodes) {
+  const ids = new Set()
+  const visit = items => {
+    for (const item of items || []) {
+      if (item.permId != null) ids.add(item.permId)
+      visit(item.children)
+    }
+  }
+  visit(nodes)
+  return ids
+}
+
+async function loadPermissionTree() {
+  const revision = ++permissionTreeRevision
+  treeLoading.value = true
+  try {
+    const nodes = await rolePermTree()
+    if (revision !== permissionTreeRevision) return false
+    if (!Array.isArray(nodes) || !nodes.length) throw new Error('Permission tree unavailable')
+    const availableIds = permissionIds(nodes)
+    const checkedLeaves = roleFormShow.value
+      ? (treeList.length ? tree.value?.getCheckedKeys?.(true) || []
+        : dialogType.type === 'set' ? chooseRole.permIds || [] : [])
+      : null
+    if (!availableIds.size || checkedLeaves?.some(id => !availableIds.has(id))) {
+      throw new Error('Permission tree incomplete')
+    }
+    treeList.splice(0, treeList.length, ...nodes)
+    await nextTick()
+    if (checkedLeaves && roleFormShow.value) tree.value?.setCheckedKeys?.(checkedLeaves)
+    treeReady.value = true
+    return true
+  } catch {
+    if (revision === permissionTreeRevision) {
+      treeReady.value = false
+      ElMessage({message: t('permissionTreeLoadFailed'), type: 'error', plain: true})
+    }
+    return false
+  } finally {
+    if (revision === permissionTreeRevision) treeLoading.value = false
+  }
+}
+
+watch(locale, loadPermissionTree)
+refresh()
 
 domainOptions = domainList.map(domain => {
   const cleanDomain = domain.replace(/^@/, '');
@@ -233,7 +297,7 @@ function banEmailAddTag(val) {
 
 
 function roleFormClick() {
-  if (permLoading.value) return
+  if (permLoading.value || treeLoading.value || !treeReady.value) return
   if (dialogType.type === 'add') {
     addRole()
   } else {
@@ -253,14 +317,14 @@ function setDef(role) {
 }
 
 function delRole(role) {
-  ElMessageBox.confirm(t('delConfirm', {msg: role.name}), {
+  ElMessageBox.confirm(t('delConfirm', {msg: displayRoleName(role, t)}), {
     confirmButtonText: t('confirm'),
-    cancelButtonText: t('confirm'),
+    cancelButtonText: t('cancel'),
     type: 'warning'
   }).then(() => {
     roleDelete(role.roleId).then(() => {
       ElMessage({
-        message: t('copySuccessMsg'),
+        message: t('delSuccessMsg'),
         type: "success",
         plain: true
       })
@@ -324,6 +388,8 @@ function setRole() {
 }
 
 function resetForm() {
+  editStoredRoleName.value = false
+  editStoredRoleDescription.value = false
   form.name = null
   form.description = null
   form.sort = 0
@@ -335,9 +401,16 @@ function resetForm() {
   tree.value.setCheckedKeys([])
 }
 
-function openRoleSet(role) {
+async function openRoleSet(role) {
+  const availableIds = permissionIds(treeList)
+  if (!treeReady.value || role.permIds?.some(id => !availableIds.has(id))) {
+    treeReady.value = false
+    if (!await loadPermissionTree()) return
+    if (role.permIds?.some(id => !permissionIds(treeList).has(id))) return
+  }
   chooseRole = role
-  dialogType.title = t('changeRoleTitle')
+  editStoredRoleName.value = false
+  editStoredRoleDescription.value = false
   dialogType.type = 'set'
   roleFormShow.value = true
   form.sort = role.sort
@@ -354,8 +427,10 @@ function openRoleSet(role) {
 }
 
 
-function openAddRole() {
-  dialogType.title = t('addRoleTitle')
+async function openAddRole() {
+  if (!treeReady.value) {
+    if (!await loadPermissionTree()) return
+  }
   dialogType.type = 'add'
   roleFormShow.value = true
 }
@@ -384,8 +459,9 @@ function addRole() {
 
 function refresh() {
   tableLoading.value = true
-  roles.length = 0
+  roles.value = []
   getRoleList()
+  loadPermissionTree()
 }
 
 function getRoleList() {
@@ -401,16 +477,17 @@ function getRoleList() {
 
 function adjustWidth() {
   desShow.value = window.innerWidth > 767
-  settingWidth.value = window.innerWidth < 480 ? (locale.value === 'en' ? 85 : 75) : null
+  settingWidth.value = window.innerWidth < 480 ? 110 : null
   sortWidth.value = window.innerWidth < 480 ? 75 : null
   roleWidth.value = window.innerWidth < 480 ? 180 : 200
 }
 
 adjustWidth()
-
-window.onresize = () => {
-  adjustWidth()
-};
+window.addEventListener('resize', adjustWidth)
+onBeforeUnmount(() => {
+  permissionTreeRevision++
+  window.removeEventListener('resize', adjustWidth)
+})
 
 
 </script>
@@ -428,6 +505,11 @@ window.onresize = () => {
 
 .send-num {
   margin-left: 10px;
+
+  .send-type-select {
+    width: clamp(110px, 24vw, 170px);
+    margin-left: 5px;
+  }
 
   .el-input-number {
     width: 95px;
@@ -520,6 +602,28 @@ window.onresize = () => {
   .dialog-input {
     margin-bottom: 15px !important;
   }
+}
+
+.stored-text-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 4px 10px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-primary);
+}
+
+.stored-text-preview span { min-width: 0; overflow-wrap: anywhere; }
+
+.tree-retry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .perm-expand {

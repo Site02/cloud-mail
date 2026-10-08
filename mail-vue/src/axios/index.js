@@ -1,16 +1,15 @@
 import axios from "axios";
 import router from "@/router";
 import i18n from "@/i18n/index.js";
-import {useSettingStore} from "@/store/setting.js";
+import {useEmailStore} from '@/store/email.js'
 
 let http = axios.create({
     baseURL: import.meta.env.VITE_BASE_URL
 });
 
 http.interceptors.request.use(config => {
-    const { lang } = useSettingStore();
     config.headers.Authorization = `${localStorage.getItem('token')}`
-    config.headers['accept-language'] = lang
+    config.headers['accept-language'] = i18n.global.locale.value || 'en'
     return config
 })
 
@@ -21,12 +20,8 @@ http.interceptors.response.use((res) => {
             const noMsg = res.config.noMsg;
             const data = res.data
 
-            if (noMsg) {
-
-                data.code === 200 ? resolve(data.data) : reject(data)
-
-            } else if (data.code === 401) {
-                ElMessage({
+            if (data.code === 401) {
+                if (!noMsg) ElMessage({
                     message: data.message,
                     type: 'error',
                     plain: true,
@@ -34,8 +29,11 @@ http.interceptors.response.use((res) => {
                     repeatNum: -4,
                 })
                 localStorage.removeItem('token')
+                useEmailStore().clearPrivateSession()
                 router.replace('/login')
                 reject(data)
+            } else if (noMsg) {
+                data.code === 200 ? resolve(data.data) : reject(data)
             } else if (data.code === 403) {
                 ElMessage({
                     message: data.message,
@@ -48,7 +46,6 @@ http.interceptors.response.use((res) => {
 
             } else if (data.code === 502) {
                 ElMessage({
-                    dangerouslyUseHTMLString: true,
                     message: data.message,
                     type: 'error',
                     plain: true,
@@ -71,12 +68,7 @@ http.interceptors.response.use((res) => {
     },
     (error) => {
 
-        if (error.status === 403) {
-            location.reload();
-            return;
-        }
-
-        const noMsg = error.config.noMsg;
+        const noMsg = error.config?.noMsg;
 
         if (noMsg) {
             return Promise.reject(error)
@@ -117,5 +109,3 @@ http.interceptors.response.use((res) => {
     })
 
 export default http
-
-

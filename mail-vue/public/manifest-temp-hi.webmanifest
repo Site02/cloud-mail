@@ -1,0 +1,33 @@
+{
+  "id": "/temporary-mail-app",
+  "name": "अस्थायी मेलबॉक्स",
+  "short_name": "अस्थायी मेल",
+  "description": "हाल के ईमेल और सत्यापन कोड के लिए अस्थायी इनबॉक्स; प्रतियाँ डिवाइस पर सहेजी जाती हैं।",
+  "start_url": "/find",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a0e14",
+  "theme_color": "#0a0e14",
+  "icons": [
+    {
+      "src": "/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "lang": "hi-IN",
+  "dir": "ltr"
+}

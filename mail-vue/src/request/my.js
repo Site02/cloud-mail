@@ -8,7 +8,6 @@ export function resetPassword(password) {
     return http.put('/my/resetPassword', {password})
 }
 
-export function userDelete() {
-    return http.delete('/my/delete')
+export function userDelete(expectedSyncDelete) {
+    return http.delete('/my/delete', {params: {expectedSyncDelete}, noMsg: true})
 }
-

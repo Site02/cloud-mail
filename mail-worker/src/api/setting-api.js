@@ -15,6 +15,7 @@ app.get('/setting/query', async (c) => {
 
 app.get('/setting/websiteConfig', async (c) => {
 	const setting = await settingService.websiteConfig(c);
+	c.header('Cache-Control', 'no-store');
 	return c.json(result.ok(setting));
 })
 
@@ -32,4 +33,3 @@ app.put('/setting/setBlacklist', async (c) => {
 	const setting = await settingService.setBlacklist(c, await c.req.json());
 	return c.json(result.ok(setting));
 })
-

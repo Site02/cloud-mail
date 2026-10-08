@@ -18,7 +18,7 @@ const roleService = {
 		let { name, permIds, banEmail, availDomain } = params;
 
 		if (!name) {
-			throw new BizError(t('emptyRoleName'));
+			throw new BizError(t(c, 'emptyRoleName'));
 		}
 
 		let roleRow = await orm(c).select().from(role).where(eq(role.name, name)).get();
@@ -26,7 +26,7 @@ const roleService = {
 		const notEmailIndex = banEmail.findIndex(item => (!verifyUtils.isEmail(item) && !verifyUtils.isDomain(item)) && item !== "*");
 
 		if (notEmailIndex > -1) {
-			throw new BizError(t('notEmail'));
+			throw new BizError(t(c, 'notEmail'));
 		}
 
 		banEmail = banEmail.join(',');
@@ -67,7 +67,7 @@ const roleService = {
 		let { name, permIds, roleId, banEmail, availDomain } = params;
 
 		if (!name) {
-			throw new BizError(t('emptyRoleName'));
+			throw new BizError(t(c, 'emptyRoleName'));
 		}
 
 		delete params.isDefault
@@ -75,7 +75,7 @@ const roleService = {
 		const notEmailIndex = banEmail.findIndex(item => (!verifyUtils.isEmail(item) && !verifyUtils.isDomain(item)) && item !== "*")
 
 		if (notEmailIndex > -1) {
-			throw new BizError(t('notEmail'));
+			throw new BizError(t(c, 'notEmail'));
 		}
 
 		banEmail = banEmail.join(',')
@@ -99,11 +99,11 @@ const roleService = {
 		const roleRow = await orm(c).select().from(role).where(eq(role.roleId, roleId)).get();
 
 		if (!roleRow) {
-			throw new BizError(t('notExist'));
+			throw new BizError(t(c, 'notExist'));
 		}
 
 		if (roleRow.isDefault) {
-			throw new BizError(t('delDefRole'));
+			throw new BizError(t(c, 'delDefRole'));
 		}
 
 		const defRoleRow = await orm(c).select().from(role).where(eq(role.isDefault, roleConst.isDefault.OPEN)).get();
@@ -126,7 +126,7 @@ const roleService = {
 	async setDefault(c, params) {
 		const roleRow = await orm(c).select().from(role).where(eq(role.roleId, params.roleId)).get();
 		if (!roleRow) {
-			throw new BizError(t('roleNotExist'));
+			throw new BizError(t(c, 'roleNotExist'));
 		}
 		await orm(c).update(role).set({ isDefault: 0 }).run();
 		await orm(c).update(role).set({ isDefault: 1 }).where(eq(role.roleId, params.roleId)).run();

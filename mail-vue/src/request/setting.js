@@ -8,8 +8,8 @@ export function settingQuery() {
     return http.get('/setting/query')
 }
 
-export function websiteConfig() {
-    return http.get('/setting/websiteConfig')
+export function websiteConfig(options = {}) {
+    return http.get('/setting/websiteConfig', options)
 }
 
 export function setBackground(background) {

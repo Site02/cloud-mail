@@ -10,9 +10,9 @@
           <span class="sender-name">{{ form.name }}</span>
           <span class="send-email"><{{ form.sendEmail }}></span>
         </div>
-        <div @click="close" style="cursor: pointer;">
+        <button type="button" class="icon-button" :aria-label="t('temporaryInbox.close')" @click="close">
           <Icon icon="material-symbols-light:close-rounded" width="22" height="22"/>
-        </div>
+        </button>
       </div>
       <div class="container">
         <el-input-tag  @add-tag="addTagChange" tag-type="primary" @input="inputChange" size="default" v-model="form.receiveEmail" >
@@ -39,26 +39,25 @@
           </template>
           <template #suffix>
             <div style="display: flex;margin-right: 3px;">
-              <Icon icon="fa7-solid:user-plus" width="20" height="20" class="add-contact" @click.stop="openContacts" />
+              <button type="button" class="icon-button" :aria-label="t('recentContacts')" @click.stop="openContacts"><Icon icon="fa7-solid:user-plus" width="20" height="20" class="add-contact" /></button>
             </div>
           </template>
         </el-input-tag>
         <el-input v-model="form.subject" :placeholder="t('subject')" />
-        <tinyEditor :def-value="defValue" ref="editor" @change="change" @focus="focusChange" />
+        <tinyEditor :def-value="defValue" ref="editor" @change="change" @focus="focusChange" @escape="close" />
         <div class="button-item">
-          <div class="att-add" @click="chooseFile">
+          <button type="button" class="icon-button att-add" :aria-label="t('attachments')" @click="chooseFile">
             <Icon icon="iconamoon:attachment-fill" width="24" height="24"/>
-          </div>
-          <div class="att-clear" @click="clearContent">
+          </button>
+          <button type="button" class="icon-button att-clear" :aria-label="t('clear')" @click="clearContent">
             <Icon icon="icon-park-outline:clear-format" width="24" height="24 "/>
-          </div>
+          </button>
           <div class="att-list">
             <div class="att-item" v-for="(item,index) in form.attachments" :key="index">
               <Icon v-bind="getIconByName(item.filename)"/>
               <span class="att-filename">{{ item.filename }}</span>
               <span class="att-size">{{ formatBytes(item.size) }}</span>
-              <Icon style="cursor: pointer;" icon="material-symbols-light:close-rounded" @click="delAtt(index)"
-                    width="22" height="22"/>
+              <button type="button" class="icon-button" :aria-label="`${t('delete')}: ${item.filename}`" @click="delAtt(index)"><Icon icon="material-symbols-light:close-rounded" width="22" height="22"/></button>
             </div>
           </div>
           <div>
@@ -94,7 +93,7 @@
 </template>
 <script setup>
 import tinyEditor from '@/components/tiny-editor/index.vue'
-import {h, nextTick, onMounted, onUnmounted, reactive, ref, toRaw, computed} from "vue";
+import {h, nextTick, onMounted, onUnmounted, reactive, ref, toRaw, computed, watch} from "vue";
 import {Icon} from "@iconify/vue";
 import {useUserStore} from "@/store/user.js";
 import {emailSend} from "@/request/email.js";
@@ -104,7 +103,6 @@ import {useEmailStore} from "@/store/email.js";
 import {fileToBase64, formatBytes} from "@/utils/file-utils.js";
 import {getIconByName} from "@/utils/icon-utils.js";
 import sendPercent from "@/components/send-percent/index.vue"
-import {toOssDomain} from "@/utils/convert.js";
 import {formatDetailDate} from "@/utils/day.js";
 import {useSettingStore} from "@/store/setting.js";
 import {userDraftStore} from "@/store/draft.js";
@@ -134,6 +132,8 @@ const show = ref(false);
 const percent = ref(0)
 let percentMessage = null
 let sending = false
+let writerOpener = null
+watch(show, visible => { if (!visible) nextTick(() => writerOpener?.isConnected && writerOpener.focus()) })
 const defValue = ref('')
 const contactsTabRef = ref({})
 const showContacts = ref(false)
@@ -143,7 +143,8 @@ const backReply = reactive({
   receiveEmail: [],
   subject: '',
   content: '',
-  sendType: ''
+  sendType: '',
+  attachments: []
 })
 const form = reactive({
   sendEmail: '',
@@ -341,7 +342,6 @@ async function sendEmail() {
 
   percentMessage = ElMessage({
     message: () => h(sendPercent, {value: percent.value, desc: t('sending')}),
-    dangerouslyUseHTMLString: true,
     plain: true,
     duration: 0,
     customClass: 'message-bottom'
@@ -421,6 +421,7 @@ function resetForm() {
   backReply.subject = ''
   backReply.receiveEmail = []
   backReply.sendType = ''
+  backReply.attachments = []
   editor.value.clearEditor()
 }
 
@@ -440,6 +441,7 @@ function openForward(email) {
 
   form.subject = email.subject
   form.sendType = 'forward'
+  form.attachments = email.attachments || []
 
   defValue.value = ''
 
@@ -452,7 +454,8 @@ function openForward(email) {
     nextTick(() => {
       backReply.content = editor.value.getContent()
       backReply.subject = form.subject
-      backReply.receiveEmail = form.receiveEmail
+      backReply.receiveEmail = [...form.receiveEmail]
+      backReply.attachments = form.attachments.map(att => ({...att}))
       backReply.sendType = form.sendType
     })
 
@@ -484,7 +487,7 @@ function openReply(email) {
         ${formatDetailDate(email.createTime)} ${email.name} &lt${email.sendEmail}&gt ${t('wrote')}:
     </div>
     <blockquote class="mceNonEditable" style="margin: 0 0 0 0.8ex;border-left: 1px solid rgb(204,204,204);padding-left: 1ex;">
-      <articl>
+      <article>
           ${formatImage(email.content) || `<pre style="font-family: inherit;word-break: break-word;white-space: pre-wrap;margin: 0">${email.text}</pre>`}
       </article>
     </blockquote>`
@@ -493,7 +496,8 @@ function openReply(email) {
     nextTick(() => {
       backReply.content = editor.value.getContent()
       backReply.subject = form.subject
-      backReply.receiveEmail = form.receiveEmail
+      backReply.receiveEmail = [...form.receiveEmail]
+      backReply.attachments = form.attachments.map(att => ({...att}))
       backReply.sendType = form.sendType
     })
   })
@@ -502,11 +506,11 @@ function openReply(email) {
 
 function formatImage(content) {
   content = content || '';
-  const domain = settingStore.settings.r2Domain;
-  return content.replace(/{{domain}}/g, toOssDomain(domain) + '/');
+  return content;
 }
 
 function open() {
+  if (!show.value) writerOpener = document.activeElement
   if (!accountStore.currentAccount.email) {
     form.sendEmail = userStore.user.email;
     form.accountId = userStore.user.account.accountId;
@@ -521,6 +525,7 @@ function open() {
 }
 
 function openDraft(draft) {
+  if (!show.value) writerOpener = document.activeElement
   Object.assign(form, {...draft})
   defValue.value = ''
   setTimeout(() => defValue.value = form.content)
@@ -570,7 +575,11 @@ function close() {
     if (backReply.sendType === 'forward' && form.receiveEmail.length === 0) {
       receiveFlag = true;
     }
-    if (subjectFlag && contentFlag && receiveFlag) {
+    const attachmentsFlag = form.attachments.length === backReply.attachments.length && form.attachments.every((att,index) => {
+      const original = backReply.attachments[index]
+      return att.filename === original.filename && att.content === original.content && att.size === original.size
+    })
+    if (subjectFlag && contentFlag && receiveFlag && attachmentsFlag) {
       resetForm();
       close()
       return;

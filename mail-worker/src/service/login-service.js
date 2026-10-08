@@ -34,35 +34,35 @@ const loginService = {
 		}
 
 		if (register === settingConst.register.CLOSE) {
-			throw new BizError(t('regDisabled'));
+			throw new BizError(t(c, 'regDisabled'));
 		}
 
 		if (!verifyUtils.isEmail(email)) {
-			throw new BizError(t('notEmail'));
+			throw new BizError(t(c, 'notEmail'));
 		}
 
 		if (emailUtils.getName(email).length < minEmailPrefix) {
-			throw new BizError(t('minEmailPrefix', { msg: minEmailPrefix } ));
+			throw new BizError(t(c, 'minEmailPrefix', { msg: minEmailPrefix } ));
 		}
 
 		if (emailPrefixFilter.some(content => emailUtils.getName(email).includes(content)))  {
-			throw new BizError(t('banEmailPrefix'));
+			throw new BizError(t(c, 'banEmailPrefix'));
 		}
 
 		if (emailUtils.getName(email).length > 64) {
-			throw new BizError(t('emailLengthLimit'));
+			throw new BizError(t(c, 'emailLengthLimit'));
 		}
 
 		if (password.length > 30) {
-			throw new BizError(t('pwdLengthLimit'));
+			throw new BizError(t(c, 'pwdLengthLimit'));
 		}
 
 		if (password.length < 6) {
-			throw new BizError(t('pwdMinLength'));
+			throw new BizError(t(c, 'pwdMinLength'));
 		}
 
 		if (!c.env.domain.includes(emailUtils.getDomain(email))) {
-			throw new BizError(t('notEmailDomain'));
+			throw new BizError(t(c, 'notEmailDomain'));
 		}
 
 		let type = null;
@@ -83,11 +83,11 @@ const loginService = {
 		const accountRow = await accountService.selectByEmailIncludeDel(c, email);
 
 		if (accountRow && accountRow.isDel === isDel.DELETE) {
-			throw new BizError(t('isDelUser'));
+			throw new BizError(t(c, 'isDelUser'));
 		}
 
 		if (accountRow) {
-			throw new BizError(t('isRegAccount'));
+			throw new BizError(t(c, 'isRegAccount'));
 		}
 
 		let defType = null
@@ -103,11 +103,11 @@ const loginService = {
 		if(!roleService.hasAvailDomainPerm(roleRow.availDomain, email)) {
 
 			if (type) {
-				throw new BizError(t('noDomainPermRegKey'),403)
+				throw new BizError(t(c, 'noDomainPermRegKey'),403)
 			}
 
 			if (defType) {
-				throw new BizError(t('noDomainPermReg'),403)
+				throw new BizError(t(c, 'noDomainPermReg'),403)
 			}
 
 		}
@@ -154,24 +154,24 @@ const loginService = {
 	async handleOpenRegKey(c, regKey, code) {
 
 		if (!code) {
-			throw new BizError(t('emptyRegKey'));
+			throw new BizError(t(c, 'emptyRegKey'));
 		}
 
 		const regKeyRow = await regKeyService.selectByCode(c, code);
 
 		if (!regKeyRow) {
-			throw new BizError(t('notExistRegKey'));
+			throw new BizError(t(c, 'notExistRegKey'));
 		}
 
 		if (regKeyRow.count <= 0) {
-			throw new BizError(t('noRegKeyCount'));
+			throw new BizError(t(c, 'noRegKeyCount'));
 		}
 
 		const today = toUtc().tz('Asia/Shanghai').startOf('day')
 		const expireTime = toUtc(regKeyRow.expireTime).tz('Asia/Shanghai').startOf('day');
 
 		if (expireTime.isBefore(today)) {
-			throw new BizError(t('regKeyExpire'));
+			throw new BizError(t(c, 'regKeyExpire'));
 		}
 
 		return { type: regKeyRow.roleId, regKeyId: regKeyRow.regKeyId };
@@ -204,29 +204,29 @@ const loginService = {
 		const { email, password } = params;
 
 		if ((!email || !password) && !noVerifyPwd) {
-			throw new BizError(t('emailAndPwdEmpty'));
+			throw new BizError(t(c, 'emailAndPwdEmpty'));
 		}
 
 		const userRow = await userService.selectByEmailIncludeDel(c, email);
 
 		if (!userRow) {
-			throw new BizError(t('notExistUser'));
+			throw new BizError(t(c, 'notExistUser'));
 		}
 
 		if(userRow.isDel === isDel.DELETE) {
-			throw new BizError(t('isDelUser'));
+			throw new BizError(t(c, 'isDelUser'));
 		}
 
 		if(userRow.status === userConst.status.BAN) {
-			throw new BizError(t('isBanUser'));
+			throw new BizError(t(c, 'isBanUser'));
 		}
 
 		if (!await cryptoUtils.verifyPassword(password, userRow.salt, userRow.password) && !noVerifyPwd) {
-			throw new BizError(t('IncorrectPwd'));
+			throw new BizError(t(c, 'IncorrectPwd'));
 		}
 
 		const uuid = uuidv4();
-		const jwt = await JwtUtils.generateToken(c,{ userId: userRow.userId, token: uuid });
+		const jwt = await JwtUtils.generateToken(c,{ userId: userRow.userId, token: uuid }, constant.TOKEN_EXPIRE);
 
 		let authInfo = await c.env.kv.get(KvConst.AUTH_INFO + userRow.userId, { type: 'json' });
 
@@ -257,11 +257,11 @@ const loginService = {
 	},
 
 	async logout(c, userId) {
-		const token =userContext.getToken(c);
+		const token = await userContext.getToken(c);
 		const authInfo = await c.env.kv.get(KvConst.AUTH_INFO + userId, { type: 'json' });
-		const index = authInfo.tokens.findIndex(item => item === token);
-		authInfo.tokens.splice(index, 1);
-		await c.env.kv.put(KvConst.AUTH_INFO + userId, JSON.stringify(authInfo));
+		if (!authInfo || !token) return;
+		authInfo.tokens = authInfo.tokens.filter(item => item !== token);
+		await c.env.kv.put(KvConst.AUTH_INFO + userId, JSON.stringify(authInfo), { expirationTtl: constant.TOKEN_EXPIRE });
 	}
 
 };

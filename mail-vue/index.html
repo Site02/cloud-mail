@@ -3,32 +3,51 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="theme-color" content="#F1F1F1" id="theme-color-meta">
-  <meta name="description" content="Cloud Mail 是一个 Serverless 响应式邮箱服务，支持邮件发送，可部署到 Cloudflare 平台，降低服务器成本。Cloud Mail is a serverless responsive email service that supports email sending and can be deployed on Cloudflare to reduce server costs.">
+  <meta name="theme-color" content="#f5f7fb" id="theme-color-meta">
+  <meta name="description" content="Email inbox, sending and account management.">
   <title>Cloud Mail</title>
-  <link rel="icon" href="/public/mail.png" type="image/png">
+  <link rel="icon" href="/mail.png" type="image/png">
+  <link rel="manifest" id="app-manifest">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <script>
-    const uiStoreStr =  localStorage.getItem('ui')
-    let isDark = false
-    if (uiStoreStr) {
-      const uiStore =  JSON.parse(uiStoreStr)
-      isDark = uiStore.dark
+    const temporaryApp = window.location.hostname.startsWith('temp.') || window.location.pathname === '/find'
+    if (temporaryApp) document.documentElement.classList.add('temp-app')
+    let uiStore
+    try { uiStore = JSON.parse(localStorage.getItem('ui') || 'null') } catch (_) {}
+    if (uiStore) {
       const root = document.documentElement
-      root.setAttribute('class', isDark ? 'dark' : '');
+      root.classList.toggle('dark', Boolean(uiStore.dark));
+      const metaTag = document.getElementById('theme-color-meta');
+      metaTag.setAttribute('content', temporaryApp ? '#0a0e14' : (uiStore.dark ? '#0d1420' : '#f5f7fb'));
     }
-    const metaTag = document.getElementById('theme-color-meta');
-    const isMobile =  !window.matchMedia("(pointer: fine) and (hover: hover)").matches;
-    metaTag.setAttribute('content', isDark ? (isMobile ? '#141414' : '#000000') : (isMobile ? '#191A23' : '#F1F1F1'));
+    if (temporaryApp && !uiStore) document.getElementById('theme-color-meta').setAttribute('content', '#0a0e14')
+  </script>
+  <script type="module">
+    import {getBrowserLanguage, resolveLanguage, intlLanguage, languageDirection, manifestPath} from '/src/i18n/languages.js'
+
+    const publicPage = window.location.hostname.startsWith('temp.') || window.location.pathname === '/find'
+    let settings
+    try { settings = JSON.parse(localStorage.getItem('setting') || 'null') } catch (_) {}
+    const selection = publicPage ? settings?.publicMailboxLanguage : settings?.lang
+    const language = resolveLanguage(selection, getBrowserLanguage())
+    document.documentElement.lang = intlLanguage(language)
+    document.documentElement.dir = languageDirection(language)
+    document.getElementById('app-manifest').href = manifestPath(language, publicPage)
   </script>
 </head>
 <style>
   html {
-    background: #FFFFFF;
+    background: #f5f7fb;
   }
   .dark {
-    background: #141414;
+    background: #0d1420;
   }
+  .temp-app { background: #0a0e14; }
   #loading-first {
     position: fixed;
     left: 0;
@@ -39,8 +58,10 @@
     justify-content: center;
     align-items: center;
     z-index: 500;
-    background: var(--el-bg-color);
+    background: #f5f7fb;
   }
+  .dark #loading-first { background: #0d1420; }
+  .temp-app #loading-first { background: #0a0e14; }
 
   .loading-hide {
     pointer-events: none;
@@ -130,7 +151,7 @@
 <body>
 <div id="loading-first" >
   <div class="loading-icon">
-    <img class="loading-image" src="/mail-pwa.png" alt="Cloud Mail">
+    <img class="loading-image" src="/app-icon-192.png" alt="">
     <div class="loading-progress" aria-hidden="true"></div>
   </div>
 </div>

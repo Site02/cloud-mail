@@ -1,0 +1,33 @@
+{
+  "id": "/temporary-mail-app",
+  "name": "Kotak Surat Sementara",
+  "short_name": "Email Sementara",
+  "description": "Kotak masuk sementara untuk email terbaru dan kode verifikasi, dengan salinan tersimpan di perangkat.",
+  "start_url": "/find",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a0e14",
+  "theme_color": "#0a0e14",
+  "icons": [
+    {
+      "src": "/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "lang": "id-ID",
+  "dir": "ltr"
+}

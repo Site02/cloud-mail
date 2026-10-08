@@ -21,6 +21,7 @@
       <template #first>
         <el-input
             v-model="searchValue"
+            @keyup.enter="search"
             :placeholder="$t('searchByContent')"
             class="search-input"
         >
@@ -44,19 +45,16 @@
             </div>
           </template>
         </el-input>
-        <el-select v-model="params.type" placeholder="Select" class="status-select" @change="typeSelectChange">
+        <el-select v-model="params.type" :placeholder="$t('select')" class="status-select" @change="typeSelectChange">
           <el-option key="1" :label="$t('all')" value="all"/>
           <el-option key="3" :label="$t('received')" value="receive"/>
           <el-option key="2" :label="$t('sent')" value="send"/>
           <el-option key="4" :label="$t('selectDeleted')" value="delete"/>
           <el-option key="4" :label="$t('noRecipientTitle')" value="noone"/>
         </el-select>
-        <Icon class="icon" icon="iconoir:search" @click="search" width="20" height="20"/>
-        <Icon class="icon" @click="changeTimeSort" icon="material-symbols-light:timer-arrow-down-outline"
-              v-if="params.timeSort === 0" width="28" height="28"/>
-        <Icon class="icon" @click="changeTimeSort" icon="material-symbols-light:timer-arrow-up-outline" v-else
-              width="28" height="28"/>
-        <Icon class="icon clear" icon="fluent:broom-sparkle-16-regular" width="22" height="22" @click="openBathDelete"/>
+        <button type="button" class="icon-button" :aria-label="t('temporaryInbox.search')" @click="search"><Icon icon="iconoir:search" width="20" height="20"/></button>
+        <button type="button" class="icon-button" :aria-label="t('order')" :aria-pressed="params.timeSort === 1" @click="changeTimeSort"><Icon :icon="params.timeSort === 0 ? 'material-symbols-light:timer-arrow-down-outline' : 'material-symbols-light:timer-arrow-up-outline'" width="28" height="28"/></button>
+        <button v-perm="'all-email:delete'" type="button" class="icon-button" :aria-label="t('clearEmail')" @click="openBathDelete"><Icon icon="fluent:broom-sparkle-16-regular" width="22" height="22"/></button>
       </template>
     </emailScroll>
     <el-dialog v-model="showBathDelete" :title="$t('clearEmail')" width="335"
@@ -75,7 +73,7 @@
                         size="default"
         />
         <div class="clear-button">
-          <el-select v-model="clearParams.type" style="width: 200px">
+          <el-select v-model="clearParams.type" class="match-type-select">
             <el-option key="eq" :label="t('equal')" value="eq"/>
             <el-option key="left" :label="t('leading')" value="left"/>
             <el-option key="include" :label="t('include')" value="include"/>
@@ -90,7 +88,7 @@
 <script setup>
 import {starAdd, starCancel} from "@/request/star.js";
 import emailScroll from "@/components/email-scroll/index.vue"
-import {computed, defineOptions, reactive, ref, watch, onMounted} from "vue";
+import {computed, defineOptions, reactive, ref, watch, onMounted, onUnmounted} from "vue";
 import {useEmailStore} from "@/store/email.js";
 import {
   allEmailList,
@@ -105,6 +103,8 @@ import {toUtc} from "@/utils/day.js";
 import {sleep} from "@/utils/time-utils.js";
 import {useSettingStore} from "@/store/setting.js";
 import { useRoute } from 'vue-router'
+import {restoreAllMailPreferences} from './preferences.js'
+import {canPollMail, mailPollingDelay} from '@/utils/mail-recovery.js'
 
 defineOptions({
   name: 'all-email'
@@ -120,6 +120,9 @@ const searchValue = ref('')
 const mySelect = ref()
 const showBathDelete = ref(false)
 const clearLoading = ref(false)
+let disposed = false
+
+onUnmounted(() => { disposed = true })
 
 onMounted(() => {
   latest();
@@ -131,7 +134,7 @@ const openSelect = () => {
 
 const params = reactive({
   timeSort: 0,
-  type: 'receive',
+  type: 'all',
   userEmail: null,
   accountEmail: null,
   name: null,
@@ -173,16 +176,13 @@ const selectTitle = computed(() => {
 })
 
 const paramsStar = localStorage.getItem('all-email-params')
-if (paramsStar) {
-  const locaParams = JSON.parse(paramsStar)
-  params.type = locaParams.type
-  params.timeSort = locaParams.timeSort
-  params.status = locaParams.status
-  params.searchType = locaParams.searchType
-}
+Object.assign(params, restoreAllMailPreferences(paramsStar))
 
 watch(() => params, () => {
-  localStorage.setItem('all-email-params', JSON.stringify(params))
+  localStorage.setItem('all-email-params', JSON.stringify({
+    timeSort: params.timeSort,
+    searchType: params.searchType,
+  }))
 }, {
   deep: true
 })
@@ -238,7 +238,7 @@ function rightSearch(type, value) {
 function refreshBefore() {
   searchValue.value = null
   params.timeSort = 0
-  params.type = 'receive'
+  params.type = 'all'
   params.userEmail = null
   params.accountEmail = null
   params.name = null
@@ -282,10 +282,12 @@ function typeSelectChange() {
 }
 
 function jumpContent(email) {
+  emailStore.contentData.sourceRoute = 'all-email'
   emailStore.contentData.email = emailStore.toContentEmail(email)
   emailStore.contentData.delType = 'physics'
   emailStore.contentData.showStar = false
   emailStore.contentData.showReply = false
+  emailStore.contentData.showUnread = false
   router.push({name: 'content'})
 }
 
@@ -295,14 +297,15 @@ function getEmailList(emailId, size) {
 }
 
 async function latest() {
-
-  while (true) {
+  let failures = 0
+  while (!disposed) {
 
     let autoRefresh = settingStore.settings.autoRefresh;
 
-    await sleep(autoRefresh > 1 ? autoRefresh * 1000 : 3000);
+    await sleep(mailPollingDelay(autoRefresh, failures));
+    if (disposed) break
 
-    const latestId = sysEmailScroll.value.latestEmail?.emailId
+    const latestId = sysEmailScroll.value?.latestEmail?.emailId
 
     if (autoRefresh < 2) {
       continue
@@ -312,25 +315,31 @@ async function latest() {
       continue
     }
 
-    if (route.name !== 'all-email') {
+    if (!canPollMail({active: route.name === 'all-email', hidden: document.hidden, disposed,
+      filtered: Boolean(params.name || params.subject || params.accountEmail || params.userEmail)})) {
       continue
     }
 
 
-    if (params.type !== 'receive') {
+    if (params.type !== 'receive' && params.type !== 'all') {
       continue
     }
 
     try {
 
       const curTimeSort = params.timeSort
+      const filterSnapshot = JSON.stringify(params)
       let list = await allEmailLatest(latestId)
+      failures = 0
+
+      if (!canPollMail({active: route.name === 'all-email', hidden: document.hidden, disposed})
+          || JSON.stringify(params) !== filterSnapshot) continue
 
       if (list.length === 0) {
         continue
       }
 
-      if (params.type !== 'receive') {
+      if (params.type !== 'receive' && params.type !== 'all') {
         continue
       }
 
@@ -349,6 +358,7 @@ async function latest() {
       }
 
     } catch (e) {
+      failures += 1
       if (e.code === 401 || e.code === 403) {
         settingStore.settings.autoRefresh = 0;
       }
@@ -446,14 +456,19 @@ async function latest() {
   align-items: center;
   gap: 15px;
 
+  .match-type-select {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
   .el-button {
-    width: 100%;
+    flex-shrink: 0;
   }
 }
 
 .status-select {
   margin-bottom: 2px;
-  width: 102px;
+  width: clamp(130px, 32vw, 210px);
 
   :deep(.el-select__wrapper) {
     min-height: 28px;
@@ -482,33 +497,4 @@ async function latest() {
   cursor: pointer;
 }
 
-.clear {
-  @media (max-width: 419px) {
-    position: absolute;
-    top: 41px;
-    left: 242px;
-  }
-}
-
-:deep(.reload) {
-  @media (max-width: 419px) {
-    position: absolute;
-    top: 42px;
-    left: 208px;
-  }
-}
-
-:deep(.delete) {
-  @media (max-width: 456px) {
-    position: absolute;
-    top: 43px;
-    left: 294px;
-  }
-
-  @media (max-width: 419px) {
-    position: absolute;
-    top: 43px;
-    left: 282px;
-  }
-}
 </style>

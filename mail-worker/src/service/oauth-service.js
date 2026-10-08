@@ -1,32 +1,39 @@
 import BizError from "../error/biz-error";
 import orm from "../entity/orm";
 import {oauth} from "../entity/oauth";
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import userService from "./user-service";
 import loginService from "./login-service";
 import cryptoUtils from "../utils/crypto-utils";
 import settingService from "./setting-service";
 import {t} from '../i18n/i18n';
+import jwtUtils from '../utils/jwt-utils';
 
 const oauthService = {
 
 	async bindUser(c, params) {
 
-		const { email, oauthUserId, code } = params;
-
-		const oauthRow = await this.getById(c, oauthUserId);
+		const { email, bindToken, code } = params;
+		const grant = await jwtUtils.verifyToken(c, bindToken);
+		if (grant?.purpose !== 'oauth-bind' || !Number.isSafeInteger(grant.oauthId)) {
+			throw new BizError(t(c, 'oauthBindInvalid'), 403);
+		}
+		const oauthRow = await orm(c).select().from(oauth).where(eq(oauth.oauthId, grant.oauthId)).get();
+		if (!oauthRow || oauthRow.userId !== 0) throw new BizError(t(c, 'oauthBindInvalid'), 403);
 
 		let userRow = await userService.selectByIdIncludeDel(c, oauthRow.userId);
 
 		if (userRow) {
-			throw new BizError('用户已绑定有邮箱')
+			throw new BizError(t(c, 'oauthAlreadyBound'))
 		}
 
 		await loginService.register(c, { email, password: cryptoUtils.genRandomPwd(), code }, true);
 
 		userRow = await userService.selectByEmail(c, email);
 
-		orm(c).update(oauth).set({ userId: userRow.userId }).where(eq(oauth.oauthUserId, oauthUserId)).run();
+		const bound = await orm(c).update(oauth).set({ userId: userRow.userId })
+			.where(and(eq(oauth.oauthId, oauthRow.oauthId), eq(oauth.userId, 0))).returning().get();
+		if (!bound) throw new BizError(t(c, 'oauthBindUsed'), 403);
 		const jwtToken = await loginService.login(c, { email, password: null }, true);
 
 		return { userInfo: oauthRow, token: jwtToken}
@@ -185,7 +192,8 @@ const oauthService = {
 		const userRow = await userService.selectByIdIncludeDel(c, oauthRow.userId);
 
 		if (!userRow) {
-			return { userInfo: oauthRow, token: null };
+			const bindToken = await jwtUtils.generateToken(c, { purpose: 'oauth-bind', oauthId: oauthRow.oauthId }, 10 * 60);
+			return { userInfo: oauthRow, token: null, bindToken };
 		}
 
 		const JwtToken = await loginService.login(c, { email: userRow.email, password: null }, true);
@@ -194,24 +202,25 @@ const oauthService = {
 
 	async saveUser(c, userInfo) {
 
-		const userInfoRow = await this.getById(c, userInfo.oauthUserId);
+		const userInfoRow = await this.getById(c, userInfo.oauthUserId, userInfo.platform);
 
 		if (!userInfoRow) {
 			return await orm(c).insert(oauth).values(userInfo).returning().get();
 		} else {
-			return await orm(c).update(oauth).set(userInfo).where(eq(oauth.oauthUserId, userInfo.oauthUserId)).returning().get();
+			return await orm(c).update(oauth).set(userInfo).where(eq(oauth.oauthId, userInfoRow.oauthId)).returning().get();
 		}
 
 	},
 
 	assertEnabled(setting, switchKey) {
 		if (setting[switchKey] !== 0) {
-			throw new BizError(t('oauthDisabled'));
+			throw new BizError(t(c, 'oauthDisabled'));
 		}
 	},
 
-	async getById(c, oauthUserId) {
-		return await orm(c).select().from(oauth).where(eq(oauth.oauthUserId, oauthUserId)).get();
+	async getById(c, oauthUserId, platform) {
+		return await orm(c).select().from(oauth)
+			.where(and(eq(oauth.oauthUserId, oauthUserId), eq(oauth.platform, platform))).get();
 	},
 
 	async deleteByUserId(c, userId) {

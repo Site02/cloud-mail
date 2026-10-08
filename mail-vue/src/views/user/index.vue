@@ -1,38 +1,55 @@
 <template>
   <div class="user-box">
     <div class="header-actions">
-      <Icon class="icon" icon="ion:add-outline" width="23" height="23" @click="openAdd"/>
+      <button v-if="hasPerm('user:add')" type="button" class="header-add" @click="openAdd">
+        <Icon icon="ion:add-outline" width="20" height="20" aria-hidden="true"/>
+        <span>{{ t('addUser') }}</span>
+      </button>
       <div class="search">
         <el-input
             v-model="params.email"
             class="search-input"
             :placeholder="$t('searchByEmail')"
+            :aria-label="t('searchByEmail')"
+            @keyup.enter="search"
         >
         </el-input>
       </div>
-      <el-select v-model="params.status" placeholder="Select" class="status-select"
-                 :style="`width: ${locale === 'en' ? 95 : 80 }px`">
+      <el-select v-model="params.status" :placeholder="$t('select')" class="status-select">
         <el-option :key="-1" :label="$t('all')" :value="-1"/>
         <el-option :key="0" :label="$t('active')" :value="0"/>
         <el-option :key="1" :label="$t('banned')" :value="1"/>
         <el-option :key="-2" :label="$t('deleted')" :value="-2"/>
       </el-select>
-      <Icon class="icon" icon="iconoir:search" @click="search" width="20" height="20"/>
-      <Icon class="icon" @click="changeTimeSort" icon="material-symbols-light:timer-arrow-down-outline"
-            v-if="params.timeSort === 1" width="28" height="28"/>
-      <Icon class="icon" @click="changeTimeSort" icon="material-symbols-light:timer-arrow-up-outline" v-else width="28"
-            height="28"/>
-      <Icon class="icon" icon="ion:reload" width="18" height="18" @click="refresh"/>
-      <Icon class="icon" icon="uiw:delete" width="16" height="16" @click="delUser"/>
+      <button type="button" class="tool-button" :aria-label="t('temporaryInbox.search')" :title="t('temporaryInbox.search')" @click="search">
+        <Icon icon="iconoir:search" width="20" height="20" aria-hidden="true"/>
+      </button>
+      <button type="button" class="tool-button" :aria-label="t('order')" :title="t('order')"
+              :aria-pressed="params.timeSort === 1" @click="changeTimeSort">
+        <Icon :icon="params.timeSort === 1 ? 'material-symbols-light:timer-arrow-down-outline' : 'material-symbols-light:timer-arrow-up-outline'"
+              width="23" height="23" aria-hidden="true"/>
+      </button>
+      <button type="button" class="tool-button" :aria-label="t('refreshMail')" :title="t('refreshMail')" @click="refresh">
+        <Icon icon="ion:reload" width="18" height="18" aria-hidden="true"/>
+      </button>
+      <button v-if="hasPerm('user:delete') && !phonePageShow" type="button" class="tool-button destructive"
+              :disabled="!selectedUsers.length" :aria-label="t('deleteUser')" :title="t('deleteUser')" @click="delUser">
+        <Icon icon="uiw:delete" width="16" height="16" aria-hidden="true"/>
+      </button>
     </div>
     <el-scrollbar ref="scrollbarRef" class="scrollbar">
       <div>
+        <div v-if="loadError" class="load-error" role="alert">
+          <span>{{ t('reqFailErrorMsg') }}</span>
+          <button type="button" @click="getUserList()">{{ t('pwa.retry') }}</button>
+        </div>
         <div class="loading" :class="tableLoading ? 'loading-show' : 'loading-hide'"
              :style="first ? 'background: transparent' : ''">
           <loading/>
         </div>
-        <el-table
+        <el-table v-if="!phonePageShow"
             @filter-change="tableFilter"
+            @selection-change="onSelectionChange"
             :empty-text="first ? '' : null"
             :data="users"
             :preserve-expanded-content="preserveExpanded"
@@ -74,7 +91,7 @@
                            prop="accountCount"/>
           <el-table-column v-if="createTimeShow" :label="$t('tabRegisteredAt')" min-width="160" prop="createTime">
             <template #default="props">
-              {{ tzDayjs(props.row.createTime).format('YYYY-MM-DD HH:mm') }}
+              {{ formatUserDate(props.row.createTime, true) }}
             </template>
           </el-table-column>
           <el-table-column v-if="statusShow" min-width="60px" :label="$t('tabStatus')" prop="status">
@@ -98,9 +115,9 @@
                 <el-button size="small" type="primary">{{ $t('action') }}</el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item @click="openSetPwd(props.row)" >{{ $t('chgPwd') }}</el-dropdown-item>
-                    <el-dropdown-item @click="openSetType(props.row)" >{{ $t('perm') }}</el-dropdown-item>
-                    <template v-if="props.row.type !== 0">
+                    <el-dropdown-item v-if="hasPerm('user:set-pwd')" @click="openSetPwd(props.row)">{{ $t('chgPwd') }}</el-dropdown-item>
+                    <el-dropdown-item v-if="hasPerm('user:set-type')" @click="openSetType(props.row)">{{ $t('perm') }}</el-dropdown-item>
+                    <template v-if="props.row.type !== 0 && hasPerm('user:set-status')">
                       <el-dropdown-item v-if="props.row.isDel !== 1" @click="setStatus(props.row)">
                         {{ setStatusName(props.row) }}
                       </el-dropdown-item>
@@ -114,6 +131,34 @@
             </template>
           </el-table-column>
         </el-table>
+        <div v-else class="mobile-user-list">
+          <article v-for="row in users" :key="row.userId" class="mobile-user-card">
+            <div class="mobile-user-primary">
+              <strong dir="ltr">{{ row.email }}</strong>
+              <el-tag v-if="row.isDel === 1" type="info">{{ t('deleted') }}</el-tag>
+              <el-tag v-else-if="row.status === 0" type="primary">{{ t('active') }}</el-tag>
+              <el-tag v-else type="danger">{{ t('banned') }}</el-tag>
+            </div>
+            <div class="mobile-user-meta">{{ t('tabRole') }}: {{ toRoleName(row.type) }}</div>
+            <div class="mobile-user-actions">
+              <el-button @click="openDetails(row)">{{ t('details') }}</el-button>
+              <el-dropdown v-if="!(row.type === 0 && userStore.user.type !== 0)" trigger="click">
+                <el-button>{{ t('action') }}</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item v-if="hasPerm('user:set-pwd')" @click="openSetPwd(row)">{{ t('chgPwd') }}</el-dropdown-item>
+                    <el-dropdown-item v-if="hasPerm('user:set-type')" @click="openSetType(row)">{{ t('perm') }}</el-dropdown-item>
+                    <el-dropdown-item v-if="row.type !== 0 && row.isDel !== 1 && hasPerm('user:set-status')" @click="setStatus(row)">{{ setStatusName(row) }}</el-dropdown-item>
+                    <el-dropdown-item v-if="row.type !== 0 && row.isDel === 1 && hasPerm('user:set-status')" @click="restore(row)">{{ t('restore') }}</el-dropdown-item>
+                    <el-dropdown-item @click="openAccountList(row.userId)">{{ t('account') }}</el-dropdown-item>
+                    <el-dropdown-item v-if="row.type !== 0 && hasPerm('user:delete')" @click="delOneUser(row)">{{ t('delete') }}</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+          </article>
+          <el-empty v-if="!users.length && !tableLoading && !loadError" :description="t('noMessagesFound')"/>
+        </div>
         <div class="pagination" v-if="total > 10">
           <el-pagination
               :size="pageSize"
@@ -155,8 +200,8 @@
     <el-dialog class="dialog" v-model="setTypeShow" :title="$t('changePerm')" @closed="resetUserForm">
       <div class="dialog-box">
         <el-input disabled :model-value="$t('admin')" v-if="userForm.type === 0"/>
-        <el-select v-else v-model="userForm.type" placeholder="Select">
-          <el-option v-for="item in roleList" :label="item.name" :value="item.roleId" :key="item.roleId"/>
+        <el-select v-else v-model="userForm.type" :placeholder="$t('select')">
+          <el-option v-for="item in roleList" :label="displayRoleName(item, t)" :value="item.roleId" :key="item.roleId"/>
         </el-select>
         <el-button :disabled="userForm.type === 0" class="btn" :loading="settingLoading" type="primary" @click="setType"
         >{{ $t('save') }}
@@ -192,7 +237,7 @@
         </el-input>
         <el-input type="password" v-model="addForm.password" :placeholder="$t('password')" @keyup.enter="submit"/>
         <el-select v-model="addForm.type" :placeholder="$t('perm')">
-          <el-option v-for="item in roleList" :label="item.name" :value="item.roleId" :key="item.roleId"/>
+          <el-option v-for="item in roleList" :label="displayRoleName(item, t)" :value="item.roleId" :key="item.roleId"/>
         </el-select>
         <el-button class="btn" type="primary" @click="submit" :loading="addLoading"
         >{{ $t('add') }}
@@ -206,13 +251,13 @@
             <div class="email-row">{{ props.row.email }}</div>
           </template>
         </el-table-column>
-        <el-table-column property="address" :label="t('tabStatus')"  :width="locale === 'en' ? 75 : 65" >
+        <el-table-column property="address" :label="t('tabStatus')" min-width="105" >
           <template #default="props">
             <el-tag type="primary" disable-transitions v-if="props.row.isDel === 0">{{$t('active')}}</el-tag>
             <el-tag type="info" disable-transitions v-if="props.row.isDel === 1">{{$t('deleted')}}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="t('action')" :width="locale === 'en' ? 75 : 65" >
+        <el-table-column :label="t('action')" min-width="105" >
           <template #default="props">
             <el-dropdown trigger="click">
               <el-button type="primary" size="small">{{t('action')}}</el-button>
@@ -254,7 +299,7 @@
           }}
         </div>
         <div v-if="!createTimeShow"><span class="details-item-title">{{ $t('tabRegisteredAt') }}:</span>{{
-            tzDayjs(userDetails.createTime).format('YYYY-MM-DD HH:mm')
+            formatUserDate(userDetails.createTime, true)
           }}
         </div>
         <div v-if="!typeShow"><span class="details-item-title">{{ $t('perm') }}:</span>
@@ -277,7 +322,7 @@
           }}
         </div>
         <div><span class="details-item-title">{{ $t('recentActivity') }}:</span>{{
-            userDetails.activeTime ? tzDayjs(userDetails.activeTime).format('YYYY-MM-DD') : $t('unknown')
+            userDetails.activeTime ? formatUserDate(userDetails.activeTime) : $t('unknown')
           }}
         </div>
         <div><span
@@ -317,7 +362,7 @@
     >
       <template #dropdown>
         <el-dropdown-menu>
-          <el-dropdown-item @click="openSetPwd(rightClickUser)">
+          <el-dropdown-item v-if="hasPerm('user:set-pwd')" @click="openSetPwd(rightClickUser)">
             <template #default>
               <div class="right-dropdown-item">
                 <icon icon="fluent:fingerprint-20-filled" width="22" height="22" />
@@ -325,7 +370,7 @@
               </div>
             </template>
           </el-dropdown-item>
-          <el-dropdown-item @click="openSetType(rightClickUser)">
+          <el-dropdown-item v-if="hasPerm('user:set-type')" @click="openSetType(rightClickUser)">
             <template #default>
               <div class="right-dropdown-item">
                 <icon icon="fluent:lock-closed-16-regular" width="21" height="21" />
@@ -333,7 +378,7 @@
               </div>
             </template>
           </el-dropdown-item>
-          <el-dropdown-item v-if="rightClickUser.type !== 0">
+          <el-dropdown-item v-if="rightClickUser.type !== 0 && hasPerm('user:set-status')">
             <template #default>
               <div class="right-dropdown-item" v-if="rightClickUser.isDel !== 1" @click="setStatus(rightClickUser)" >
                 <Icon icon="ion:reload" v-if="rightClickUser.status" style="margin-left: 1px;margin-right: 1px" width="19" height="19" />
@@ -362,7 +407,7 @@
               </div>
             </template>
           </el-dropdown-item>
-          <el-dropdown-item v-if="rightClickUser.type !== 0" @click="delOneUser(rightClickUser)" >
+          <el-dropdown-item v-if="rightClickUser.type !== 0 && hasPerm('user:delete')" @click="delOneUser(rightClickUser)" >
             <template #default>
               <div class="right-dropdown-item" >
                 <Icon icon="uiw:delete" width="18" height="18" style="margin-left: 1px;margin-right: 1px" />
@@ -377,7 +422,7 @@
 </template>
 
 <script setup>
-import {defineOptions, h, reactive, ref, watch} from 'vue'
+import {computed, defineOptions, h, onActivated, onDeactivated, onUnmounted, reactive, ref, watch} from 'vue'
 import {
   userList,
   userDelete,
@@ -399,12 +444,21 @@ import {isEmail} from "@/utils/verify-utils.js";
 import {useRoleStore} from "@/store/role.js";
 import {useUserStore} from "@/store/user.js";
 import {useI18n} from 'vue-i18n';
+import {hasPerm} from '@/perm/perm.js';
+import {intlLanguage} from '@/i18n/languages.js';
+import {displayRoleName} from '@/i18n/system-defaults.js';
 
 defineOptions({
   name: 'user'
 })
 
 const {t, locale} = useI18n();
+
+function formatUserDate(time, includeTime = false) {
+  const options = {year: 'numeric', month: 'short', day: 'numeric'}
+  if (includeTime) Object.assign(options, {hour: 'numeric', minute: '2-digit'})
+  return new Intl.DateTimeFormat(intlLanguage(locale.value), options).format(tzDayjs(time).toDate())
+}
 const roleStore = useRoleStore()
 const userStore = useUserStore()
 const settingStore = useSettingStore()
@@ -422,7 +476,7 @@ function oauthPlatform(row) {
   return null
 }
 const filteredValue = ['normal', 'del']
-const filters = [{text: t('active'), value: 'normal'}, {text: t('deleted'), value: 'del'}]
+const filters = computed(() => [{text: t('active'), value: 'normal'}, {text: t('deleted'), value: 'del'}])
 const preserveExpanded = ref(false)
 const emailWidth = ref(230)
 const expandWidth = ref(40)
@@ -438,6 +492,10 @@ const detailsShow = ref(false);
 const layout = ref('prev, pager, next,  sizes, total')
 const pageSize = ref('')
 const users = ref([])
+const selectedUsers = ref([])
+const loadError = ref(false)
+function onSelectionChange(rows) { selectedUsers.value = rows }
+let listRequestId = 0
 const tableRef = ref({})
 const userDetails = ref({})
 const total = ref(0)
@@ -539,11 +597,11 @@ const filterItem = reactive({
   receive: ['normal', 'del']
 })
 
-window.addEventListener('wheel', (event) => {
+function closeDropdownOnWheel() {
   if (dropdownShow.value) {
     dropdownRef.value.handleClose();
   }
-})
+}
 
 function visibleChange(e) {
   dropdownShow.value = e;
@@ -811,7 +869,7 @@ function toRoleName(type) {
 
   const index = roleList.findIndex(role => role.roleId === type)
   if (index > -1) {
-    return roleList[index].name
+    return displayRoleName(roleList[index], t)
   }
   return ""
 }
@@ -1024,7 +1082,9 @@ function sizeChange(size) {
 
 function getUserList(loading = true) {
 
+  const requestId = ++listRequestId
   tableLoading.value = loading
+  loadError.value = false
   const newParams = {...params}
 
   if (newParams.status === -2) {
@@ -1032,10 +1092,16 @@ function getUserList(loading = true) {
     newParams.isDel = 1
   }
   userList(newParams).then(data => {
+    if (requestId !== listRequestId) return
     users.value = data.list.map(item => ({...item, checkedClass: ''}))
     total.value = data.total
+    selectedUsers.value = []
     scrollbarRef.value?.setScrollTop(0);
+  }).catch(() => {
+    if (requestId !== listRequestId) return
+    loadError.value = true
   }).finally(() => {
+    if (requestId !== listRequestId) return
     tableLoading.value = false
     setTimeout(() => {
       first.value = false
@@ -1043,21 +1109,30 @@ function getUserList(loading = true) {
   })
 }
 
-window.onresize = () => {
+function bindWindowEvents() {
+  window.addEventListener('resize', adjustWidth)
+  window.addEventListener('wheel', closeDropdownOnWheel)
   adjustWidth()
-};
+}
+function unbindWindowEvents() {
+  window.removeEventListener('resize', adjustWidth)
+  window.removeEventListener('wheel', closeDropdownOnWheel)
+}
+onActivated(bindWindowEvents)
+onDeactivated(unbindWindowEvents)
+onUnmounted(unbindWindowEvents)
 
 adjustWidth()
 
 function adjustWidth() {
   const width = window.innerWidth
-  statusShow.value = width > 1090
+  statusShow.value = width >= 768
   createTimeShow.value = width > 1367
-  accountNumShow.value = width > 650
-  sendNumShow.value = width > 685
-  typeShow.value = width > 767
+  accountNumShow.value = width > 1000
+  sendNumShow.value = width > 1000
+  typeShow.value = width > 1150
   emailWidth.value = width > 480 ? 230 : null
-  settingWidth.value = width < 480 ? (locale.value === 'en' ? 85 : 75) : null
+  settingWidth.value = width < 480 ? 110 : null
   expandWidth.value = width < 480 ? 30 : 35
   pagerCount.value = width < 768 ? 7 : 11
   receiveWidth.value = width < 480 ? 90 : null
@@ -1090,6 +1165,10 @@ function adjustWidth() {
 .user-box {
   overflow: hidden;
   height: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--ui-surface, var(--el-bg-color));
 }
 
 :deep(.el-dialog) {
@@ -1111,16 +1190,18 @@ function adjustWidth() {
 }
 
 .header-actions {
-  padding: 9px 15px;
+  min-height: 56px;
+  flex: 0 0 auto;
+  padding: 8px 15px;
   display: flex;
-  gap: 15px;
+  gap: 8px;
   flex-wrap: wrap;
   align-items: center;
-  box-shadow: var(--header-actions-border);
+  border-bottom: 1px solid var(--ui-line, var(--el-border-color));
   font-size: 18px;
 
   .search-input {
-    width: min(200px, calc(100vw - 140px));
+    width: clamp(180px, 24vw, 330px);
   }
 
   .search {
@@ -1136,6 +1217,40 @@ function adjustWidth() {
   .icon {
     cursor: pointer;
   }
+
+  .header-add,
+  .tool-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 40px;
+    border-radius: 8px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 14px;
+  }
+
+  .header-add {
+    padding: 8px 14px;
+    border: 1px solid var(--ui-primary, var(--el-color-primary));
+    color: #fff;
+    background: var(--ui-primary, var(--el-color-primary));
+    font-weight: 700;
+  }
+
+  .tool-button {
+    width: 40px;
+    padding: 0;
+    border: 0;
+    color: var(--ui-ink, var(--el-text-color-primary));
+    background: transparent;
+  }
+
+  .tool-button:hover { background: var(--ui-surface-alt, var(--el-fill-color-light)); }
+  .tool-button.destructive { color: var(--el-color-danger); }
+  .tool-button:disabled { opacity: .45; cursor: default; }
+  button:focus-visible { outline: 2px solid var(--ui-focus, var(--el-color-primary)); outline-offset: 2px; }
 }
 
 .container {
@@ -1157,9 +1272,53 @@ function adjustWidth() {
 .scrollbar {
   width: 100%;
   overflow: auto;
-  height: calc(100% - 50px);
-  @media (max-width: 464px) {
-    height: calc(100% - 90px);
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 0;
+}
+
+.load-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ui-line, var(--el-border-color));
+  color: var(--el-color-danger);
+  background: var(--ui-surface-alt, var(--el-fill-color-light));
+  font-size: 14px;
+  button {
+    min-height: 36px;
+    padding: 6px 12px;
+    border: 1px solid var(--ui-line, var(--el-border-color));
+    border-radius: 7px;
+    color: var(--ui-ink, var(--el-text-color-primary));
+    background: var(--ui-surface, var(--el-bg-color));
+    cursor: pointer;
+  }
+}
+
+.mobile-user-list { display: grid; }
+.mobile-user-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--ui-line, var(--el-border-color));
+  .mobile-user-primary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+  strong { min-width: 0; overflow-wrap: anywhere; text-align: start; color: var(--ui-ink, var(--el-text-color-primary)); }
+  .mobile-user-meta { color: var(--ui-muted, var(--el-text-color-regular)); font-size: 13px; }
+  .mobile-user-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .mobile-user-actions .el-button { min-height: 40px; margin: 0; }
+}
+
+@media (max-width: 767px) {
+  .header-actions {
+    padding: 10px 12px;
+    .header-add { order: 0; }
+    .search { order: 1; flex: 1 1 150px; min-width: 0; }
+    .search-input { width: 100%; }
+    .status-select { order: 2; width: 120px; }
+    .tool-button { order: 3; }
   }
 }
 
@@ -1222,6 +1381,7 @@ function adjustWidth() {
 }
 
 .status-select {
+  width: clamp(120px, 30vw, 190px);
   :deep(.el-select__wrapper) {
     min-height: 28px;
   }

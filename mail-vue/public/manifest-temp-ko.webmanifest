@@ -1,0 +1,33 @@
+{
+  "id": "/temporary-mail-app",
+  "name": "임시 메일함",
+  "short_name": "임시 메일함",
+  "description": "최근 메일과 인증 코드를 확인하고 기기에 사본을 저장하는 임시 메일함.",
+  "start_url": "/find",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a0e14",
+  "theme_color": "#0a0e14",
+  "icons": [
+    {
+      "src": "/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "lang": "ko-KR",
+  "dir": "ltr"
+}

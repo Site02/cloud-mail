@@ -56,6 +56,7 @@ function changeTimeSort() {
 }
 
 function jumpContent(email) {
+  emailStore.contentData.sourceRoute = 'send'
   emailStore.contentData.email = emailStore.toContentEmail(email)
   emailStore.contentData.delType = 'logic'
   emailStore.contentData.showStar = true

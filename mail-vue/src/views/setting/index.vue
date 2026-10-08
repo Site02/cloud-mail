@@ -32,23 +32,15 @@
     </div>
     <div class="language">
       <div class="title">{{$t('language')}}</div>
-      <el-select
-          :model-value="langSelect"
-          class="language-select"
-          placeholder="Select"
-          @change="changeLang"
-      >
-        <el-option label="中文" value="zh" @pointerdown.prevent.stop="changeLang('zh')"/>
-        <el-option label="English" value="en" @pointerdown.prevent.stop="changeLang('en')"/>
-      </el-select>
+      <LanguageSelect v-model="settingStore.lang" />
     </div>
     <div class="del-email" v-perm="'my:delete'">
       <div class="title">{{$t('deleteUser')}}</div>
       <div style="color: var(--regular-text-color);">
-        {{$t('delAccountMsg')}}
+        {{ t(settingStore.settings.syncDelete === 0 ? 'delAccountMsg' : 'delAccountSoftMsg') }}
       </div>
       <div>
-        <el-button type="primary" @click="deleteConfirm">{{$t('deleteUserBtn')}}</el-button>
+        <el-button type="primary" :loading="deleteChecking" @click="deleteConfirm">{{$t('deleteUserBtn')}}</el-button>
       </div>
     </div>
     <el-dialog v-model="pwdShow" :title="$t('changePassword')" width="340">
@@ -69,15 +61,18 @@ import {accountSetName} from "@/request/account.js";
 import {useAccountStore} from "@/store/account.js";
 import {useI18n} from "vue-i18n";
 import {useSettingStore} from "@/store/setting.js";
+import LanguageSelect from '@/components/language-select/index.vue'
+import {websiteConfig} from '@/request/setting.js'
+import {requestErrorMessage} from '@/utils/request-error.js'
 
 const { t } = useI18n()
 const accountStore = useAccountStore()
 const settingStore = useSettingStore()
 const userStore = useUserStore();
 const setPwdLoading = ref(false)
+const deleteChecking = ref(false)
 const setNameShow = ref(false)
 const accountName = ref(null)
-const langSelect = ref(settingStore.lang)
 
 defineOptions({
   name: 'setting'
@@ -122,39 +117,46 @@ function setName() {
   })
 }
 
-function changeLang(lang) {
-  let setting = {}
-  try {
-    setting = JSON.parse(localStorage.getItem('setting') || '{}')
-  } catch (e) {
-    setting = {}
-  }
-  localStorage.setItem('setting', JSON.stringify({...setting, lang}))
-  window.location.reload()
-}
-
 const pwdShow = ref(false)
 const form = reactive({
   password: '',
   newPwd: '',
 })
 
-const deleteConfirm = () => {
-  ElMessageBox.confirm(t('delAccountConfirm'), {
-    confirmButtonText: t('confirm'),
-    cancelButtonText: t('cancel'),
-    type: 'warning'
-  }).then(() => {
-    userDelete().then(() => {
-      localStorage.removeItem('token');
-      router.replace('/login');
-      ElMessage({
-        message: t('delSuccessMsg'),
-        type: 'success',
-        plain: true,
+async function deleteConfirm() {
+  if (deleteChecking.value) return
+  deleteChecking.value = true
+  try {
+    let mode
+    try {
+      const current = await websiteConfig({timeout: 12000, noMsg: true})
+      mode = Number(current?.syncDelete)
+      if (mode !== 0 && mode !== 1) throw new Error('Deletion policy unavailable')
+      settingStore.settings.syncDelete = mode
+    } catch (error) {
+      ElMessage({message: requestErrorMessage(error, 'reqFailErrorMsg', t), type: 'error', plain: true})
+      return
+    }
+
+    try {
+      await ElMessageBox.confirm(t(mode === 0 ? 'delAccountConfirm' : 'delAccountSoftConfirm'), {
+        confirmButtonText: t('confirm'),
+        cancelButtonText: t('cancel'),
+        type: 'warning'
       })
-    })
-  })
+    } catch { return }
+
+    try {
+      await userDelete(mode)
+      localStorage.removeItem('token')
+      router.replace('/login')
+      ElMessage({message: t('delSuccessMsg'), type: 'success', plain: true})
+    } catch (error) {
+      ElMessage({message: requestErrorMessage(error, 'reqFailErrorMsg', t), type: 'error', plain: true})
+    }
+  } finally {
+    deleteChecking.value = false
+  }
 }
 
 
@@ -283,9 +285,6 @@ function submitPwd() {
     gap: 20px;
     margin-bottom: 40px;
 
-    .language-select {
-      width: 100px;
-    }
   }
 
   .del-email {

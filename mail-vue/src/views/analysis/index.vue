@@ -88,8 +88,8 @@
             <span>{{ $t('emailSource') }}</span>
             <span class="source-button" v-if="false">
               <el-radio-group v-model="checkedSourceType">
-                <el-radio-button label="发件人" value="sender"/>
-                <el-radio-button label="邮箱" value="email"/>
+                <el-radio-button :label="$t('sender')" value="sender"/>
+                <el-radio-button :label="$t('account')" value="email"/>
               </el-radio-group>
             </span>
           </div>
@@ -130,12 +130,13 @@ import {debounce} from "lodash-es";
 import loading from "@/components/loading/index.vue";
 import {useRoute} from "vue-router";
 import {useI18n} from 'vue-i18n';
+import {intlLanguage} from '@/i18n/languages.js';
 
 defineOptions({
   name: 'analysis'
 })
 
-const {t} = useI18n();
+const {t, locale} = useI18n();
 const route = useRoute();
 const uiStore = useUiStore()
 const checkedSourceType = ref('sender')
@@ -206,6 +207,15 @@ let first = true
 let boxKey = ref(0)
 let senderPieLeft = window.innerWidth < 500 ? `${window.innerWidth - 110}` : '72%'
 let analysisDark = uiStore.dark
+let analysisLocale = locale.value
+let userLineDates = []
+let emailColumnDates = []
+
+function formatChartDay(value) {
+  return new Intl.DateTimeFormat(intlLanguage(locale.value), {
+    month: 'numeric', day: 'numeric',
+  }).format(dayjs(value).toDate())
+}
 
 onMounted(() => {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -230,10 +240,12 @@ onMounted(() => {
       }
     })
 
-    userLineData.xdata = data.userDayCount.map(item => dayjs(item.date).format("M.D"));
+    userLineDates = data.userDayCount.map(item => item.date)
+    userLineData.xdata = userLineDates.map(formatChartDay)
     userLineData.sdata = data.userDayCount.map(item => item.total)
 
-    emailColumnData.daysData = data.emailDayCount.receiveDayCount.map(item => dayjs(item.date).format("M.D"))
+    emailColumnDates = data.emailDayCount.receiveDayCount.map(item => item.date)
+    emailColumnData.daysData = emailColumnDates.map(formatChartDay)
     emailColumnData.receiveData = data.emailDayCount.receiveDayCount.map(item => item.total)
     emailColumnData.sendData = data.emailDayCount.sendDayCount.map(item => item.total)
     daySendTotal = data.daySendTotal
@@ -265,6 +277,9 @@ onActivated(() => {
   } else if (analysisDark !== uiStore.dark) {
     initPicture()
     analysisDark = uiStore.dark
+  } else if (analysisLocale !== locale.value) {
+    initPicture()
+    analysisLocale = locale.value
   }
 })
 
@@ -281,6 +296,16 @@ watch(() => uiStore.dark, () => {
   if (route.name !== 'analysis') return
   analysisDark = uiStore.dark
   initPicture()
+})
+
+watch(locale, () => {
+  if (analysisLoading.value) return
+  userLineData.xdata = userLineDates.map(formatChartDay)
+  emailColumnData.daysData = emailColumnDates.map(formatChartDay)
+  if (route.name === 'analysis') {
+    analysisLocale = locale.value
+    initPicture()
+  }
 })
 
 function initPicture() {
@@ -925,8 +950,6 @@ function createSendGauge() {
 }
 
 </style>
-
-
 
 
 

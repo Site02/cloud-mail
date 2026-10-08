@@ -1,31 +1,40 @@
 <template>
   <div class="box">
     <div class="header-actions">
-      <Icon class="icon" icon="material-symbols-light:arrow-back-ios-new" width="20" height="20" @click="handleBack"/>
-      <Icon v-perm="'email:delete'" class="icon" icon="uiw:delete" width="16" height="16" @click="handleDelete"/>
-      <span class="star" v-if="emailStore.contentData.showStar">
-        <Icon class="icon" @click="changeStar" v-if="email.isStar" icon="fluent-color:star-16" width="20" height="20"/>
-        <Icon class="icon" @click="changeStar" v-else icon="solar:star-line-duotone" width="18" height="18"/>
-      </span>
-      <Icon class="icon" v-if="emailStore.contentData.showReply" v-perm="'email:send'"  @click="openReply" icon="la:reply" width="21" height="21" />
-      <Icon class="icon" v-if="emailStore.contentData.showReply" v-perm="'email:send'"  @click="openForward" icon="iconoir:arrow-up-right" width="20" height="20" />
+      <button type="button" class="icon-button" :aria-label="t('backToList')" :title="t('backToList')" @click="handleBack">
+        <Icon icon="material-symbols-light:arrow-back-ios-new" width="20" height="20"/>
+      </button>
+      <button v-perm="'email:delete'" type="button" class="icon-button" :aria-label="t('delete')" :title="t('delete')" @click="handleDelete">
+        <Icon icon="uiw:delete" width="16" height="16"/>
+      </button>
+      <button v-if="emailStore.contentData.showStar" type="button" class="icon-button star"
+              :aria-label="t('star')" :aria-pressed="!!email.isStar" :title="t('star')" @click="changeStar">
+        <Icon v-if="email.isStar" icon="fluent-color:star-16" width="20" height="20"/>
+        <Icon v-else icon="solar:star-line-duotone" width="18" height="18"/>
+      </button>
+      <button v-if="emailStore.contentData.showReply" v-perm="'email:send'" type="button" class="icon-button"
+              :disabled="preparingCompose" :aria-label="t('reply')" :title="t('reply')" @click="openReply">
+        <Icon icon="la:reply" width="21" height="21"/>
+      </button>
+      <button v-if="emailStore.contentData.showReply" v-perm="'email:send'" type="button" class="icon-button"
+              :disabled="preparingCompose" :aria-label="t('forward')" :title="t('forward')" @click="openForward">
+        <Icon icon="iconoir:arrow-up-right" width="20" height="20"/>
+      </button>
     </div>
     <div></div>
     <el-scrollbar class="scrollbar">
       <div class="container">
-        <div class="email-title">
-          {{ email.subject }}
-        </div>
+        <h1 ref="readerHeading" class="email-title" tabindex="-1">{{ email.subject || t('noSubject') }}</h1>
         <div class="content">
           <div class="email-info">
             <div>
               <div class="send"><span class="send-source">{{$t('from')}}</span>
                 <div class="send-name">
                   <span class="send-name-title">{{ email.name }}</span>
-                  <span><{{ email.sendEmail }}></span>
+                  <span dir="ltr">&lt;{{ email.sendEmail }}&gt;</span>
                 </div>
               </div>
-              <div class="receive"><span class="source">{{$t('recipient')}}</span><span class="receive-email">{{  formateReceive(email.recipient) }}</span></div>
+              <div class="receive"><span class="source">{{$t('recipient')}}</span><span class="receive-email" dir="ltr">{{ formateReceive(email.recipient) }}</span></div>
               <div class="date">
                 <div>{{ formatDetailDate(email.createTime) }}</div>
               </div>
@@ -35,8 +44,14 @@
             <el-alert v-if="email.status === 5" :closable="false" :title="$t('delayed')" class="email-msg" type="warning" show-icon />
           </div>
           <el-scrollbar class="htm-scrollbar" :class="!email.attList?.length ? 'bottom-distance' : ''">
-            <ShadowHtml class="shadow-html" :html="formatImage(email.content)" v-if="email.content" />
-            <pre v-else class="email-text" >{{email.text}}</pre>
+            <div v-if="email.content && mediaState === 'error'" class="media-error" role="alert">
+              <span>{{ t('imageReopen') }}</span>
+              <button type="button" @click="loadInlineMedia">{{ t('pwa.retry') }}</button>
+            </div>
+            <iframe class="mail-frame" :title="t('emailText')" :srcdoc="frameHtml"
+                    v-if="email.content && mediaState !== 'loading'"
+                    sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"/>
+            <pre v-else-if="!email.content" class="email-text" dir="auto">{{email.text}}</pre>
           </el-scrollbar>
           <div class="att" v-if="email.attList?.length > 0">
             <div class="att-title">
@@ -46,18 +61,28 @@
             <div class="att-box">
 
               <div class="att-item" v-for="att in email.attList" :key="att.attId">
-                <div class="att-icon" @click="showImage(att.key)">
+                <component :is="isImage(att.filename) ? 'button' : 'div'" class="att-icon"
+                           :type="isImage(att.filename) ? 'button' : undefined"
+                           :aria-label="isImage(att.filename) ? `${t('preview')}: ${att.filename}` : undefined"
+                           @click="showImage(att)">
                   <Icon v-bind="getIconByName(att.filename)" />
-                </div>
-                <div class="att-name" @click="showImage(att.key)">
+                </component>
+                <component :is="isImage(att.filename) ? 'button' : 'div'" class="att-name"
+                           :type="isImage(att.filename) ? 'button' : undefined"
+                           :aria-label="isImage(att.filename) ? `${t('preview')}: ${att.filename}` : undefined"
+                           @click="showImage(att)">
                   {{ att.filename }}
-                </div>
+                </component>
                 <div class="att-size">{{ formatBytes(att.size) }}</div>
                 <div class="opt-icon att-icon">
-                  <Icon v-if="isImage(att.filename)" icon="hugeicons:view" width="22" height="22" @click="showImage(att.key)"/>
-                  <a :href="cvtR2Url(att.key)" download>
+                  <button v-if="isImage(att.filename)" type="button" :aria-label="`${t('preview')}: ${att.filename}`"
+                          :title="t('preview')" @click="showImage(att)">
+                    <Icon icon="hugeicons:view" width="22" height="22"/>
+                  </button>
+                  <button type="button" :aria-label="`${t('temporaryInbox.download')}: ${att.filename}`"
+                          :title="t('temporaryInbox.download')" @click="downloadAttachment(att)">
                     <Icon icon="system-uicons:push-down" width="22" height="22"/>
-                  </a>
+                  </button>
                 </div>
               </div>
             </div>
@@ -69,35 +94,36 @@
         v-if="showPreview"
         :url-list="srcList"
         show-progress
-        @close="showPreview = false"
+        @close="() => closePreview()"
     />
   </div>
 </template>
 <script setup>
-import ShadowHtml from '@/components/shadow-html/index.vue'
-import {computed, reactive, ref, watch, onMounted, onUnmounted} from "vue";
+import {mailFramePolicy} from '@/utils/mail-frame-policy.js'
+import {computed, reactive, ref, watch, onMounted, onUnmounted, nextTick} from "vue";
 import {useRouter} from 'vue-router'
 import {ElMessage, ElMessageBox} from 'element-plus'
-import {emailDelete, emailRead} from "@/request/email.js";
+import {emailContentMedia, emailDelete, emailRead} from "@/request/email.js";
 import {Icon} from "@iconify/vue";
 import {useEmailStore} from "@/store/email.js";
 import {useAccountStore} from "@/store/account.js";
 import {formatDetailDate} from "@/utils/day.js";
 import {starAdd, starCancel} from "@/request/star.js";
-import {getExtName, formatBytes} from "@/utils/file-utils.js";
-import {cvtR2Url,toOssDomain} from "@/utils/convert.js";
+import {getExtName, formatBytes, fileToBase64} from "@/utils/file-utils.js";
 import {getIconByName} from "@/utils/icon-utils.js";
-import {useSettingStore} from "@/store/setting.js";
-import {allEmailDelete} from "@/request/all-email.js";
+import {allEmailDelete, allEmailContentMedia} from "@/request/all-email.js";
 import {useUiStore} from "@/store/ui.js";
 import {useI18n} from "vue-i18n";
 import {EmailUnreadEnum} from "@/enums/email-enum.js";
+import {inlineMediaKeys, hasCompleteInlineMedia} from '@/utils/inline-media.js'
+import {attachmentPath} from '@/utils/mail-recovery.js'
+import {prepareComposeMail} from '@/utils/compose-media.js'
 
 const uiStore = useUiStore();
-const settingStore = useSettingStore();
 const accountStore = useAccountStore();
 const emailStore = useEmailStore();
 const router = useRouter()
+const readerHeading = ref(null)
 const email = computed(() => emailStore.contentData.email || {
   emailId: 0,
   attList: [],
@@ -107,6 +133,65 @@ const email = computed(() => emailStore.contentData.email || {
 })
 const showPreview = ref(false)
 const srcList = reactive([])
+const inlineMedia = ref({})
+const mediaState = ref('loading')
+const previewUrls = new Set()
+let mediaRequestId = 0
+let mediaLoadedAt = 0
+let previewRequestId = 0
+
+const inlineKeys = computed(() => inlineMediaKeys(email.value?.content))
+
+async function loadInlineMedia() {
+  const requestId = ++mediaRequestId
+  inlineMedia.value = {}
+  mediaState.value = 'loading'
+  if (!inlineKeys.value.length) {
+    mediaState.value = 'ready'
+    return
+  }
+  if (!email.value?.emailId) {
+    mediaState.value = 'error'
+    return
+  }
+  try {
+    const urls = await (emailStore.contentData.delType === 'physics'
+      ? allEmailContentMedia(email.value.emailId)
+      : emailContentMedia(email.value.emailId))
+    if (requestId !== mediaRequestId) return
+    if (!hasCompleteInlineMedia(inlineKeys.value, urls)) {
+      mediaState.value = 'error'
+      return
+    }
+    inlineMedia.value = urls
+    mediaLoadedAt = Date.now()
+    mediaState.value = 'ready'
+  } catch {
+    if (requestId === mediaRequestId) mediaState.value = 'error'
+  }
+}
+
+watch(() => [email.value?.emailId, email.value?.content, emailStore.contentData.delType], loadInlineMedia, { immediate: true })
+
+function refreshInlineMedia() {
+  if (document.hidden || !inlineKeys.value.length) return
+  if (mediaState.value === 'error' || (mediaState.value === 'ready' && Date.now() - mediaLoadedAt > 12 * 60 * 1000)) {
+    loadInlineMedia()
+  }
+}
+
+const frameHtml = computed(() => {
+  const content = String(email.value?.content || '').replace(
+      /\{\{domain\}\}(attachments\/[A-Za-z0-9._-]+)/g,
+      (_, key) => inlineMedia.value[key] || ''
+  ).replace(/\{\{domain\}\}/g, '')
+  const origin = window.location.origin
+  return `<!doctype html><meta charset="utf-8">`
+      + `<meta http-equiv="Content-Security-Policy" content="${mailFramePolicy(origin)}">`
+      + `<meta name="referrer" content="no-referrer"><base target="_blank">`
+      + `<style>body{margin:0;padding:16px;background:#fff;color:#13181d;font:14px/1.5 sans-serif;word-break:break-word}`
+      + `img{max-width:100%;height:auto}table{max-width:100%}</style>${content}`
+})
 
 const { t } = useI18n()
 watch(() => accountStore.currentAccountId, () => {
@@ -149,14 +234,23 @@ watch(
 )
 
 onMounted(() => {
+  if (!email.value?.emailId) {
+    router.replace({name: 'email'})
+    return
+  }
   tryMarkRead()
-  window.addEventListener('keydown', handleKeyDown);
+  window.addEventListener('keydown', handleKeyDown, true);
+  document.addEventListener('visibilitychange', refreshInlineMedia)
+  nextTick(() => readerHeading.value?.focus())
 })
 
 onUnmounted(() => {
   emailStore.contentData.showUnread = false;
   readRequesting = false
-  window.removeEventListener('keydown', handleKeyDown);
+  window.removeEventListener('keydown', handleKeyDown, true);
+  document.removeEventListener('visibilitychange', refreshInlineMedia)
+  ++mediaRequestId
+  closePreview(false)
 })
 
 function handleKeyDown(event) {
@@ -168,30 +262,108 @@ function handleKeyDown(event) {
   handleBack();
 }
 
-function openReply() {
-  uiStore.writerRef.openReply(email.value)
+const preparingCompose = ref(false)
+async function openCompose(forward) {
+  if (preparingCompose.value) return
+  preparingCompose.value = true
+  const source = email.value
+  const revision = emailStore.sessionRevision
+  try {
+    const urls = inlineMediaKeys(source.content).length ? await emailContentMedia(source.emailId) : {}
+    const prepared = await prepareComposeMail(source, {
+      inlineUrls: urls, forward,
+      readInline: async url => {
+        const response = await fetch(url, {cache:'no-store', signal:AbortSignal.timeout(12000)})
+        if (!response.ok || !response.headers.get('Content-Type')?.startsWith('image/')) throw new Error('Unavailable image')
+        return fileToBase64(await response.blob(), true)
+      },
+      readAttachment: async att => {
+        const blob = await attachmentBlob(att)
+        return {content:await fileToBase64(blob),size:blob.size}
+      }
+    })
+    if (email.value !== source || emailStore.sessionRevision !== revision) return
+    if (forward) uiStore.writerRef.openForward(prepared)
+    else uiStore.writerRef.openReply(prepared)
+  } catch {
+    ElMessage({message:t('attachmentReopen'),type:'error',plain:true})
+  } finally { preparingCompose.value = false }
 }
-
-function openForward() {
-  uiStore.writerRef.openForward(email.value)
-}
+function openReply() { return openCompose(false) }
+function openForward() { return openCompose(true) }
 
 function toMessage(message) {
-  return  message ? JSON.parse(message).message : '';
+  if (!message) return ''
+  try { return JSON.parse(message).message || '' }
+  catch { return String(message) }
 }
 
-function formatImage(content) {
-  content = content || '';
-  const domain = settingStore.settings.r2Domain;
-  return  content.replace(/{{domain}}/g, toOssDomain(domain) + '/');
+function attachmentUrl(att) {
+  const params = new URLSearchParams({emailId: String(email.value.emailId), attId: String(att.attId)})
+  return `${import.meta.env.VITE_BASE_URL.replace(/\/$/, '')}${attachmentPath(emailStore.contentData.delType)}?${params}`
 }
 
-function showImage(key) {
-  if (!isImage(key)) return;
-  const url = cvtR2Url(key)
+async function attachmentBlob(att) {
+  const response = await fetch(attachmentUrl(att), {
+    headers: {Authorization: localStorage.getItem('token') || ''},
+    signal: AbortSignal.timeout(12000),
+    cache: 'no-store'
+  })
+  if (!response.ok || response.headers.get('Content-Type')?.startsWith('application/json')) {
+    throw new Error(t('attachmentReopen'))
+  }
+  return response.blob()
+}
+
+async function downloadAttachment(att) {
+  try {
+    const blob = await attachmentBlob(att)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = att.filename || 'attachment'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  } catch {
+    ElMessage.error(t('attachmentReopen'))
+  }
+}
+
+let previewOpener = null
+
+function closePreview(restoreFocus = true) {
+  ++previewRequestId
+  showPreview.value = false
   srcList.length = 0
-  srcList.push(url)
-  showPreview.value = true
+  for (const url of previewUrls) URL.revokeObjectURL(url)
+  previewUrls.clear()
+  const opener = previewOpener
+  previewOpener = null
+  if (restoreFocus && opener?.isConnected) {
+    nextTick(() => {
+      if (opener.isConnected) opener.focus()
+    })
+  }
+}
+
+async function showImage(att) {
+  if (!isImage(att.filename)) return
+  closePreview(false)
+  const requestId = previewRequestId
+  const emailId = email.value.emailId
+  previewOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  try {
+    const blob = await attachmentBlob(att)
+    if (requestId !== previewRequestId || email.value.emailId !== emailId) return
+    const url = URL.createObjectURL(blob)
+    previewUrls.add(url)
+    srcList.push(url)
+    showPreview.value = true
+  } catch {
+    if (requestId === previewRequestId) ElMessage.error(t('imageReopen'))
+  }
 }
 
 function isImage(filename) {
@@ -231,7 +403,8 @@ function changeStar() {
 }
 
 const handleBack = () => {
-  router.back()
+  if (window.history.state?.back) router.back()
+  else router.push({name: 'email'})
 }
 
 const handleDelete = () => {
@@ -284,7 +457,42 @@ const handleDelete = () => {
     justify-content: center;
     min-width: 21px;
   }
-  .icon {
+  .icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    min-height: 30px;
+    color: inherit;
+    cursor: pointer;
+  }
+}
+
+.icon-button:focus-visible,
+.att-item button:focus-visible,
+.media-error button:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.media-error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--el-color-danger-light-7);
+  border-radius: 6px;
+  color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+
+  button {
+    padding: 4px 8px;
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    color: inherit;
     cursor: pointer;
   }
 }
@@ -343,7 +551,7 @@ const handleDelete = () => {
       }
 
       .att-item {
-        cursor: pointer;
+        cursor: default;
         div {
           align-self: center;
         }
@@ -357,6 +565,11 @@ const handleDelete = () => {
           display: grid;
         }
 
+        button {
+          color: inherit;
+          cursor: pointer;
+        }
+
         .att-size {
           color: var(--secondary-text-color);
         }
@@ -368,6 +581,7 @@ const handleDelete = () => {
           overflow: hidden;
           text-overflow: ellipsis;
           word-break: break-all;
+          text-align: start;
         }
 
         .att-image {
@@ -383,7 +597,7 @@ const handleDelete = () => {
           display: flex;
           gap: 8px;
           cursor: pointer;
-          a {
+          button {
             color: var(--secondary-text-color);
             align-items: center;
             display: flex;
@@ -453,15 +667,11 @@ const handleDelete = () => {
   }
 }
 
-.shadow-html::after  {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--message-block-color); /* 半透明黑色蒙层 */
-  pointer-events: none; /* 不影响点击 */
+.mail-frame {
+  width: 100%;
+  min-height: 52vh;
+  border: 0;
+  background: #fff;
 }
 
 .email-text {
@@ -475,5 +685,95 @@ const handleDelete = () => {
   margin-bottom: 30px;
 }
 
+.box {
+  min-width: 0;
+  background: var(--ui-surface, var(--el-bg-color));
+}
+
+.header-actions {
+  min-height: 56px;
+  padding: 5px 16px;
+  gap: 6px;
+  border-bottom: 1px solid var(--ui-line, var(--el-border-color));
+  box-shadow: none;
+
+  .icon-button {
+    min-width: 44px;
+    min-height: 44px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+  }
+
+  .icon-button:hover { background: var(--ui-surface-alt, var(--el-fill-color-light)); }
+}
+
+.icon-button:focus-visible,
+.att-item button:focus-visible {
+  outline-color: var(--ui-focus, var(--el-color-primary));
+}
+
+.scrollbar { height: calc(100% - 56px); }
+
+.container {
+  width: min(100%, 900px);
+  margin-inline: auto;
+  padding: 26px clamp(18px, 3vw, 46px) 64px;
+  font-size: 15px;
+  line-height: 1.65;
+
+  .email-title {
+    margin: 0 0 22px;
+    color: var(--ui-ink, var(--el-text-color-primary));
+    font-size: clamp(22px, 2.3vw, 30px);
+    line-height: 1.25;
+    letter-spacing: -.025em;
+    overflow-wrap: anywhere;
+  }
+
+  .email-title:focus { outline: none; }
+
+  .content {
+    .email-info {
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+      border-color: var(--ui-line, var(--light-border-color));
+      .date, .send .send-name, .receive span:nth-child(2) { color: var(--ui-muted, var(--regular-text-color)); }
+      .send .send-name { min-width: 0; gap: 4px; overflow-wrap: anywhere; }
+      .send-source, .source { padding-inline-end: 10px; padding-right: 0; }
+      .receive-email { text-align: start; }
+    }
+
+    .att {
+      width: min(100%, 680px);
+      margin-block: 28px 30px;
+      padding: 16px;
+      border-color: var(--ui-line, var(--light-border-color));
+      border-radius: 10px;
+      .att-box { min-width: 0; width: 100%; max-width: none; }
+      .att-item {
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
+        gap: 7px;
+        padding: 10px;
+        border-radius: 8px;
+        button { min-width: 36px; min-height: 36px; }
+        .att-name { margin-inline: 4px; margin-left: 0; margin-right: 0; }
+        .opt-icon { padding-inline-start: 8px; padding-left: 0; }
+      }
+    }
+  }
+}
+
+@media (max-width: 600px) {
+  .header-actions { padding-inline: 8px; }
+  .container { padding: 22px 16px 72px; }
+  .container .content .att .att-item {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    .att-size { grid-column: 2; }
+    .opt-icon { grid-column: 3; grid-row: 1 / 3; }
+  }
+}
+
+:global([dir="rtl"] .box .header-actions .icon-button:first-child svg) { transform: scaleX(-1); }
 
 </style>

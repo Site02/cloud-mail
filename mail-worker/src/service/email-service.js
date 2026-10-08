@@ -43,7 +43,7 @@ const emailService = {
 		}
 
 		if (isNaN(accountId)) {
-			throw new BizError(t('emptyAccountId'));
+			throw new BizError(t(c, 'emptyAccountId'));
 		}
 
 		if (isNaN(size)) {
@@ -221,7 +221,7 @@ const emailService = {
 	async delete(c, params, userId) {
 		const { emailIds } = params;
 		const emailIdList = emailIds.split(',').map(Number);
-		const { syncDelete } = await settingService.query(c);
+		const syncDelete = await settingService.deletionMode(c);
 
 		if (syncDelete === settingConst.syncDelete.OPEN) {
 			const owned = await orm(c).select({ emailId: email.emailId }).from(email)
@@ -263,11 +263,11 @@ const emailService = {
 
 		const { resendTokens, r2Domain, send, domainList } = await settingService.query(c);
 
-		let { imageDataList, html } = await attService.toImageUrlHtml(c, content);
+		let { imageDataList, html } = await attService.toImageUrlHtml(c, content, userId);
 
 		//判断是否关闭发件功能
 		if (send === settingConst.send.CLOSE) {
-			throw new BizError(t('disabledSend'), 403);
+			throw new BizError(t(c, 'disabledSend'), 403);
 		}
 
 		const userRow = await userService.selectById(c, userId);
@@ -283,12 +283,12 @@ const emailService = {
 
 			//发件被禁用
 			if (roleRow.sendType === 'ban') {
-				throw new BizError(t('bannedSend'), 403);
+				throw new BizError(t(c, 'bannedSend'), 403);
 			}
 
 			//发件被禁用
 			if (roleRow.sendType === 'internal' && !allInternal) {
-				throw new BizError(t('onlyInternalSend'), 403);
+				throw new BizError(t(c, 'onlyInternalSend'), 403);
 			}
 
 		}
@@ -297,13 +297,13 @@ const emailService = {
 		if (c.env.admin !== userRow.email && roleRow.sendCount) {
 
 			if (userRow.sendCount >= roleRow.sendCount) {
-				if (roleRow.sendType === 'day') throw new BizError(t('daySendLimit'), 403);
-				if (roleRow.sendType === 'count') throw new BizError(t('totalSendLimit'), 403);
+				if (roleRow.sendType === 'day') throw new BizError(t(c, 'daySendLimit'), 403);
+				if (roleRow.sendType === 'count') throw new BizError(t(c, 'totalSendLimit'), 403);
 			}
 
 			if (userRow.sendCount + receiveEmail.length > roleRow.sendCount) {
-				if (roleRow.sendType === 'day') throw new BizError(t('daySendLack'), 403);
-				if (roleRow.sendType === 'count') throw new BizError(t('totalSendLack'), 403);
+				if (roleRow.sendType === 'day') throw new BizError(t(c, 'daySendLack'), 403);
+				if (roleRow.sendType === 'count') throw new BizError(t(c, 'totalSendLack'), 403);
 			}
 
 		}
@@ -311,17 +311,17 @@ const emailService = {
 		const accountRow = await accountService.selectById(c, accountId);
 
 		if (!accountRow) {
-			throw new BizError(t('senderAccountNotExist'));
+			throw new BizError(t(c, 'senderAccountNotExist'));
 		}
 
 		if (accountRow.userId !== userId) {
-			throw new BizError(t('sendEmailNotCurUser'));
+			throw new BizError(t(c, 'sendEmailNotCurUser'));
 		}
 
 		if (c.env.admin !== userRow.email) {
 			//用户没有这个域名的使用权限
 			if(!roleService.hasAvailDomainPerm(roleRow.availDomain, accountRow.email)) {
-				throw new BizError(t('noDomainPermSend'),403)
+				throw new BizError(t(c, 'noDomainPermSend'),403)
 			}
 
 		}
@@ -332,7 +332,7 @@ const emailService = {
 
 		//如果接收方存在站外邮箱，又没有发信服务
 		if (!useCloudflareEmail && !resendToken && !allInternal) {
-			throw new BizError(t('noSendProvider'));
+			throw new BizError(t(c, 'noSendProvider'));
 		}
 
 		//没有发件人名字自动截取
@@ -350,7 +350,7 @@ const emailService = {
 			emailRow = await this.selectById(c, emailId);
 
 			if (!emailRow) {
-				throw new BizError(t('notExistEmailReply'));
+				throw new BizError(t(c, 'notExistEmailReply'));
 			}
 
 		}
@@ -437,7 +437,7 @@ const emailService = {
 		//保存内嵌附件
 		if (imageDataList.length > 0) {
 			if (imageDataList.length > 10) {
-				throw new BizError(t('imageAttLimit'));
+				throw new BizError(t(c, 'imageAttLimit'));
 			}
 			await attService.saveArticleAtt(c, imageDataList, userId, accountId, emailResult.emailId);
 		}
@@ -445,7 +445,7 @@ const emailService = {
 		//保存普通附件
 		if (attachments?.length > 0) {
 			if (attachments.length > 10) {
-				throw new BizError(t('attLimit'));
+				throw new BizError(t(c, 'attLimit'));
 			}
 			await attService.saveSendAtt(c, attachments, userId, accountId, emailResult.emailId);
 		}
@@ -455,7 +455,7 @@ const emailService = {
 
 		//如果全是站内接收方，直接写入数据库
 		if (allInternal) {
-			await this.HandleOnSiteEmail(c, receiveEmail, emailResult, attList);
+			await this.HandleOnSiteEmail(c, receiveEmail, emailResult);
 		}
 
 		const dateStr = dayjs().format('YYYY-MM-DD');
@@ -637,10 +637,23 @@ const emailService = {
 		return content;
 	},
 
+	rewriteInlineImageKeys(content, keyMap) {
+		if (!content || !keyMap.size) return content;
+		const {document} = parseHTML(content);
+		for (const image of document.querySelectorAll('img')) {
+			const src = image.getAttribute('src');
+			if (!src?.startsWith('{{domain}}')) continue;
+			const replacement = keyMap.get(src.slice('{{domain}}'.length));
+			if (replacement) image.setAttribute('src', '{{domain}}' + replacement);
+		}
+		return document.toString();
+	},
+
 	//处理站内邮件发送
-	async HandleOnSiteEmail(c, receiveEmail, sendEmailData, attList) {
+	async HandleOnSiteEmail(c, receiveEmail, sendEmailData) {
 
 		const { noRecipient  } = await settingService.query(c);
+		const sourceAttachments = await attService.selectAllByEmailId(c, sendEmailData.emailId);
 
 		//查询所有收件人账号信息
 		let accountList = await orm(c).select().from(account).where(inArray(account.email, receiveEmail)).all();
@@ -743,11 +756,13 @@ const emailService = {
 		const receiveEmailList = emailDataList.filter(emailRow => emailRow.status === emailConst.status.RECEIVE || emailRow.status === emailConst.status.NOONE);
 
 		for (const emailData of receiveEmailList) {
+			const {copies, keyMap} = await attService.copyForDelivery(c, sourceAttachments);
+			emailData.content = this.rewriteInlineImageKeys(emailData.content, keyMap);
 
 			const emailRow = await orm(c).insert(email).values(emailData).returning().get();
 
 			//设置附件保存
-			for (const attRow of attList) {
+			for (const attRow of copies) {
 				const attValues = {...attRow};
 				attValues.emailId = emailRow.emailId;
 				attValues.accountId = emailRow.accountId;
@@ -893,6 +908,71 @@ const emailService = {
 			))
 			.groupBy(email.userId);
 		return result;
+	},
+
+	// 地址记录：从收到的邮件反推用过哪些地址，不依赖有没有建过账号。
+	// 生成了却没用过的地址不会出现在这里——它压根没收过信，本来就不该被记一笔。
+	// GROUP BY 里裸取 send_email/subject/code 是 SQLite 的既定行为：
+	// 与 MAX(email_id) 同一行的值，正好是这个地址最近一封信。
+	async addressList(c, params, userId) {
+
+		const userRow = await userService.selectById(c, userId);
+		const isAdmin = userRow?.email === c.env.admin;
+
+		let { size, num, keyword } = params;
+		size = Math.min(Number(size) || 30, 100);
+		num = Math.max(Number(num) || 1, 1);
+
+		const where = ['e.type = 0', 'e.is_del = 0'];
+		const binds = [];
+
+		// 非管理员只看自己名下的；管理员额外能看到无归属（user_id = 0）的
+		if (!isAdmin) {
+			where.push('e.user_id = ?');
+			binds.push(userId);
+		}
+
+		if (keyword) {
+			where.push('(e.to_email LIKE ? OR e.send_email LIKE ? OR e.subject LIKE ?)');
+			binds.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+		}
+
+		const sql = `
+			SELECT e.to_email                          AS toEmail,
+			       COUNT(*)                            AS mailCount,
+			       MIN(e.create_time)                  AS firstTime,
+			       MAX(e.email_id)                     AS lastEmailId,
+			       e.create_time                       AS lastTime,
+			       e.send_email                        AS lastSender,
+			       e.subject                           AS lastSubject,
+			       e.code                              AS lastCode,
+			       (SELECT a.account_id FROM account a
+			         WHERE a.email = e.to_email COLLATE NOCASE AND a.is_del = 0
+			         LIMIT 1)                          AS accountId
+			FROM email e
+			WHERE ${where.join(' AND ')}
+			GROUP BY e.to_email COLLATE NOCASE
+			ORDER BY lastEmailId DESC
+			LIMIT ? OFFSET ?
+		`;
+
+		binds.push(size, (num - 1) * size);
+
+		const { results } = await c.env.db.prepare(sql).bind(...binds).all();
+		return results || [];
+	},
+
+	// 把此前落在「无收件人」里的历史邮件认领给刚添加的邮箱
+	// 无归属邮件在收信时写的是 userId=0 / accountId=0 / status=NOONE
+	async claimNoOne(c, toEmail, userId, accountId) {
+		const res = await orm(c).update(email)
+			.set({ userId: userId, accountId: accountId, status: emailConst.status.RECEIVE })
+			.where(and(
+				eq(email.userId, 0),
+				eq(email.status, emailConst.status.NOONE),
+				sql`${email.toEmail} COLLATE NOCASE = ${toEmail}`
+			)).run();
+		return res.meta?.changes ?? 0;
 	},
 
 	async allList(c, params) {

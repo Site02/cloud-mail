@@ -27,11 +27,13 @@ const saltHashUtils = {
 		return hash === storedHash;
 	},
 
-	genRandomPwd(length = 8) {
+	genRandomPwd(length = 24) {
 		const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 		let result = '';
 		for (let i = 0; i < length; i++) {
-			result += chars.charAt(Math.floor(Math.random() * chars.length));
+			let random;
+			do { random = crypto.getRandomValues(new Uint8Array(1))[0]; } while (random >= 248);
+			result += chars.charAt(random % chars.length);
 		}
 		return result;
 	}

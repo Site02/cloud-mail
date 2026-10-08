@@ -3,8 +3,6 @@ import emailService from '../service/email-service';
 import accountService from '../service/account-service';
 import settingService from '../service/setting-service';
 import attService from '../service/att-service';
-import constant from '../const/constant';
-import fileUtils from '../utils/file-utils';
 import { emailConst, isDel, settingConst } from '../const/entity-const';
 import emailUtils from '../utils/email-utils';
 import roleService from '../service/role-service';
@@ -132,7 +130,7 @@ export async function email(message, env, ctx) {
 
 		for (let item of email.attachments) {
 			let attachment = { ...item };
-			attachment.key = constant.ATTACHMENT_PREFIX + await fileUtils.getBuffHash(attachment.content) + fileUtils.getExtFileName(item.filename);
+			attachment.key = attService.newKey(item.filename);
 			attachment.size = item.content.length ?? item.content.byteLength;
 			attachments.push(attachment);
 			if (attachment.contentId) {

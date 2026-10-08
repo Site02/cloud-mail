@@ -28,6 +28,7 @@ const scroll = ref({})
 const emailStore = useEmailStore();
 
 function jumpContent(email) {
+  emailStore.contentData.sourceRoute = 'star'
   emailStore.contentData.email = emailStore.toContentEmail(email)
   emailStore.contentData.delType = 'logic'
   emailStore.contentData.showStar = true

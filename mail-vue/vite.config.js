@@ -17,25 +17,15 @@ export default defineConfig(({mode}) => {
         base: env.VITE_STATIC_URL || '/',
         plugins: [vue(),
             VitePWA({
-                injectRegister: 'script-defer',
-                manifest: {
-                    name: env.VITE_PWA_NAME,
-                    short_name: env.VITE_PWA_NAME,
-                    background_color: '#FFFFFF',
-                    theme_color: '#FFFFFF',
-                    icons: [
-                        {
-                            src: 'mail-pwa.png',
-                            sizes: '192x192',
-                            type: 'image/png',
-                        }
-                    ],
-                },
+                injectRegister: false,
+                registerType: 'prompt',
+                manifest: false,
                 workbox: {
                     disableDevLogs: true,
-                    globPatterns: [],
+                    globPatterns: ['index.html', 'assets/**/*.{js,css}', 'app-icon-*.png', 'apple-touch-icon.png'],
                     runtimeCaching: [],
-                    navigateFallback: null,
+                    navigateFallback: '/index.html',
+                    navigateFallbackDenylist: [/^\/api\//, /^\/attachments\//, /^\/static\//],
                     cleanupOutdatedCaches: true,
                 }
             }),

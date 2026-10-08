@@ -1,0 +1,33 @@
+{
+  "id": "/temporary-mail-app",
+  "name": "Temporary Mailbox",
+  "short_name": "Temp Mail",
+  "description": "Temporary inbox with online mail history and local copies.",
+  "start_url": "/find",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a0e14",
+  "theme_color": "#0a0e14",
+  "icons": [
+    {
+      "src": "/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "lang": "en-US",
+  "dir": "ltr"
+}

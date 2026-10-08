@@ -5,10 +5,9 @@ import {emailConst} from "../const/entity-const";
 const dbInit = {
 	async init(c) {
 
-		const secret = c.req.param('secret');
-
-		if (secret !== c.env.jwt_secret) {
-			return c.text('❌ JWT secret mismatch');
+		const secret = c.req.header('X-Init-Key');
+		if (!c.env.init_secret || !secret || secret !== c.env.init_secret) {
+			return c.text('Not found', 404);
 		}
 
 		await this.intDB(c);
@@ -47,15 +46,17 @@ const dbInit = {
 			console.warn(`跳过字段：${e.message}`);
 		}
 
-		try {
-			await c.env.db.batch([
-				c.env.db.prepare(`ALTER TABLE setting ADD COLUMN webhook_url TEXT NOT NULL DEFAULT '';`),
-				c.env.db.prepare(`ALTER TABLE setting ADD COLUMN webhook_status INTEGER NOT NULL DEFAULT 1;`),
-				c.env.db.prepare(`ALTER TABLE setting ADD COLUMN webhook_retry INTEGER NOT NULL DEFAULT 0;`),
-				c.env.db.prepare(`ALTER TABLE setting ADD COLUMN webhook_secret TEXT NOT NULL DEFAULT '';`)
-			]);
-		} catch (e) {
-			console.warn(`跳过字段：${e.message}`);
+		for (const statement of [
+			`ALTER TABLE setting ADD COLUMN webhook_url TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE setting ADD COLUMN webhook_status INTEGER NOT NULL DEFAULT 1;`,
+			`ALTER TABLE setting ADD COLUMN webhook_retry INTEGER NOT NULL DEFAULT 0;`,
+			`ALTER TABLE setting ADD COLUMN webhook_secret TEXT NOT NULL DEFAULT '';`
+		]) {
+			try {
+				await c.env.db.prepare(statement).run();
+			} catch (error) {
+				if (!/duplicate column name/i.test(String(error?.message))) throw error;
+			}
 		}
 	},
 
@@ -96,6 +97,7 @@ const dbInit = {
 				c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_user_create_time ON user(create_time)`),
 				c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_user_type ON user(type)`),
 				c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_attachments_email_type ON attachments(email_id, type)`),
+				c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_attachments_key_type ON attachments(key, type)`),
 				c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_role_perm_role ON role_perm(role_id)`),
 				c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_oauth_oauth_user_id ON oauth(oauth_user_id)`),
 				c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_oauth_user_id ON oauth(user_id)`)

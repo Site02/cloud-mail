@@ -8,7 +8,7 @@ const routes = [
     {
         path: '/',
         name: 'layout',
-        redirect: '/inbox',
+        redirect: () => window.location.hostname.startsWith('temp.') ? '/find' : '/inbox',
         component: () => import('@/layout/index.vue'),
         children: [
             {
@@ -42,6 +42,16 @@ const routes = [
                 }
             },
             {
+                path: '/addresses',
+                name: 'address',
+                component: () => import('@/views/address/index.vue'),
+                meta: {
+                    title: 'addressBook',
+                    name: 'address',
+                    menu: true
+                }
+            },
+            {
                 path: '/starred',
                 name: 'star',
                 component: () => import('@/views/star/index.vue'),
@@ -58,6 +68,11 @@ const routes = [
         path: '/login',
         name: 'login',
         component: () => import('@/views/login/index.vue')
+    },
+    {
+        path: '/find',
+        name: 'find',
+        component: () => import('@/views/find/index.vue')
     },
     {
         path: '/test',
@@ -87,6 +102,11 @@ let timer
 let first = true
 
 router.beforeEach((to, from, next) => {
+
+    // 公开查码页，不需要登录
+    if (to.path.startsWith('/find')) {
+        return next()
+    }
 
     if (timer) {
         clearTimeout(timer)
@@ -160,7 +180,7 @@ router.afterEach((to) => {
     const uiStore = useUiStore()
     if (to.meta.menu) {
         if (['content', 'email', 'send'].includes(to.meta.name)) {
-            uiStore.accountShow = window.innerWidth > 767;
+            uiStore.accountShow = window.innerWidth >= 1440;
         } else {
             uiStore.accountShow = false
         }

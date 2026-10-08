@@ -1,0 +1,33 @@
+{
+  "id": "/temporary-mail-app",
+  "name": "一時メールボックス",
+  "short_name": "一時メール",
+  "description": "最近のメールと確認コードを受け取り、端末にコピーを保存できる一時受信箱。",
+  "start_url": "/find",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a0e14",
+  "theme_color": "#0a0e14",
+  "icons": [
+    {
+      "src": "/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "lang": "ja-JP",
+  "dir": "ltr"
+}

@@ -1,0 +1,33 @@
+{
+  "id": "/temporary-mail-app",
+  "name": "Hộp thư tạm thời",
+  "short_name": "Thư tạm",
+  "description": "Hộp thư tạm thời cho email gần đây và mã xác minh, lưu bản sao trên thiết bị.",
+  "start_url": "/find",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a0e14",
+  "theme_color": "#0a0e14",
+  "icons": [
+    {
+      "src": "/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "lang": "vi-VN",
+  "dir": "ltr"
+}

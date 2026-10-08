@@ -29,9 +29,9 @@
                 <div>
                   <el-select
                       @change="change"
-                      :style="`width: ${ locale === 'en' ?  100 : 80 }px;`"
+                      class="setting-value-select"
                       v-model="setting.regKey"
-                      placeholder="Select"
+                      :placeholder="$t('select')"
                   >
                     <el-option
                         v-for="item in regKeyOptions"
@@ -156,9 +156,9 @@
                 <div>
                   <el-select
                       @change="change"
-                      :style="`width: ${ locale === 'en' ? 100 : 80 }px;`"
+                      class="setting-value-select"
                       v-model="setting.autoRefresh"
-                      placeholder="Select"
+                      :placeholder="$t('select')"
                   >
                     <el-option
                         v-for="item in authRefreshOptions"
@@ -256,8 +256,9 @@
                 <div><span>{{ $t('webhook') }}</span></div>
                 <div class="forward">
                   <span>{{ setting.webhookStatus === 0 ? $t('enabled') : $t('disabled') }}</span>
-                  <el-button class="opt-button" size="small" type="primary" @click="openWebhookSetting">
-                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
+                  <el-button v-perm="'setting:set'" class="opt-button" size="small" type="primary"
+                             :aria-label="t('webhook')" @click="openWebhookSetting">
+                    <Icon icon="fluent:settings-48-regular" width="18" height="18" aria-hidden="true"/>
                   </el-button>
                 </div>
               </div>
@@ -326,10 +327,9 @@
                   </el-button>
                   <el-select
                       @change="change"
-                      :style="`width: ${ locale === 'en' ? 100 : 80 }px;`"
+                      class="setting-value-select bot-verify-select"
                       v-model="setting.registerVerify"
-                      placeholder="Select"
-                      class="bot-verify-select"
+                      :placeholder="$t('select')"
                   >
                     <el-option key="1" :value="0" :label="$t('enable')"/>
                     <el-option key="1" :value="1" :label="$t('disable')"/>
@@ -345,10 +345,9 @@
                   </el-button>
                   <el-select
                       @change="change"
-                      :style="`width: ${ locale === 'en' ? 100 : 80 }px;`"
+                      class="setting-value-select bot-verify-select"
                       v-model="setting.addEmailVerify"
-                      placeholder="Select"
-                      class="bot-verify-select"
+                      :placeholder="$t('select')"
                   >
                     <el-option key="1" :value="0" :label="$t('enable')"/>
                     <el-option key="1" :value="1" :label="$t('disable')"/>
@@ -357,7 +356,7 @@
                 </div>
               </div>
               <div class="setting-item">
-                <div><span>Site Key</span></div>
+                <div><span>{{ $t('siteKey') }}</span></div>
                 <div class="bot-verify">
                   <span>{{ setting.siteKey }}</span>
                   <el-button class="opt-button" size="small" type="primary" @click="turnstileShow = true">
@@ -366,7 +365,7 @@
                 </div>
               </div>
               <div class="setting-item">
-                <div><span>Secret Key</span></div>
+                <div><span>{{ $t('secretKey') }}</span></div>
                 <div class="bot-verify">
                   <span> {{ setting.secretKey }} </span>
                   <el-button class="opt-button" size="small" type="primary" @click="turnstileShow = true">
@@ -441,57 +440,6 @@
             </div>
           </div>
 
-          <div class="settings-card about">
-            <div class="card-title">{{ $t('about') }}</div>
-            <div class="card-content">
-              <div class="concerning-item">
-                <span>{{ $t('version') }} :</span>
-                <el-badge is-dot :hidden="!hasUpdate">
-                  <el-button @click="jump('https://github.com/maillab/cloud-mail/releases')">
-                    {{ currentVersion }}
-                    <template #icon>
-                      <Icon icon="qlementine-icons:version-control-16" style="font-size: 20px" color="#1890FF"/>
-                    </template>
-                  </el-button>
-                </el-badge>
-              </div>
-              <div class="concerning-item">
-                <span>{{ $t('community') }} : </span>
-                <div class="community">
-                  <el-button @click="jump('https://github.com/maillab/cloud-mail')">
-                    Github
-                    <template #icon>
-                      <Icon icon="codicon:github-inverted" width="22" height="22"/>
-                    </template>
-                  </el-button>
-                  <el-button @click="jump('https://t.me/cloud_mail_tg')">
-                    Telegram
-                    <template #icon>
-                      <Icon icon="logos:telegram" width="30" height="30"/>
-                    </template>
-                  </el-button>
-                </div>
-              </div>
-              <div class="concerning-item">
-                <span>{{ $t('support') }} : </span>
-                <el-button @click="jump('https://doc.skymail.ink/support.html')">
-                  {{ t('supportDesc') }}
-                  <template #icon>
-                    <Icon color="#79D6B5" icon="simple-icons:buymeacoffee" width="20" height="20"/>
-                  </template>
-                </el-button>
-              </div>
-              <div class="concerning-item">
-                <span>{{ $t('help') }} : </span>
-                <el-button @click="jump('https://doc.skymail.ink')">
-                  {{ t('document') }}
-                  <template #icon>
-                    <Icon color="#79D6B5" icon="fluent-color:document-32" width="18" height="18"/>
-                  </template>
-                </el-button>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -504,7 +452,7 @@
       </el-dialog>
       <el-dialog v-model="resendTokenFormShow" :title="$t('resendToken')" width="340" @closed="cleanResendTokenForm">
         <form @submit.prevent>
-          <el-select style="margin-bottom: 15px" v-model="resendTokenForm.domain" placeholder="Select">
+          <el-select style="margin-bottom: 15px" v-model="resendTokenForm.domain" :placeholder="$t('select')">
             <el-option
                 v-for="item in settingStore.domainList"
                 :key="item"
@@ -526,8 +474,8 @@
       <el-dialog v-model="turnstileShow" :title="$t('addTurnstileSecret')" width="340"
                  @closed="turnstileForm.secretKey = '';turnstileForm.siteKey = ''">
         <form @submit.prevent>
-          <el-input type="text" placeholder="Site Key" v-model="turnstileForm.siteKey" @keyup.enter="saveTurnstileKey"/>
-          <el-input type="text" style="margin-top: 15px" placeholder="Secret Key" v-model="turnstileForm.secretKey" @keyup.enter="saveTurnstileKey"/>
+          <el-input type="text" :placeholder="$t('siteKey')" v-model="turnstileForm.siteKey" @keyup.enter="saveTurnstileKey"/>
+          <el-input type="text" style="margin-top: 15px" :placeholder="$t('secretKey')" v-model="turnstileForm.secretKey" @keyup.enter="saveTurnstileKey"/>
           <el-button type="primary" :loading="settingLoading" @click="saveTurnstileKey">{{ $t('save') }}</el-button>
         </form>
       </el-dialog>
@@ -683,27 +631,32 @@
         </template>
         <div class="forward-set-body">
           <el-input :placeholder="$t('webhookUrl')" v-model="webhookUrl" @keyup.enter="webhookSave"></el-input>
-          <el-input :placeholder="$t('webhookSecret')" v-model="webhookSecret" @keyup.enter="webhookSave"></el-input>
+          <el-input :placeholder="$t('webhookSecret')" v-model="webhookSecret" type="password"
+                    autocomplete="new-password" show-password :disabled="webhookSecretCleared"
+                    @keyup.enter="webhookSave"></el-input>
+          <el-checkbox v-if="setting.webhookSecretConfigured" v-model="webhookSecretCleared" class="webhook-clear-secret"
+                       :label="$t('webhookClearSecret')" @change="webhookSecret = ''"/>
           <div class="tg-msg-label">
             <span>{{ t('webhookRetry') }}</span>
             <el-input-number v-model="webhookRetry" :min="0" :max="5" controls-position="right"/>
           </div>
-          <div v-show="webhookFormatShow" class="webhook-format">
+          <div id="webhook-format-example" v-show="webhookFormatShow" class="webhook-format">
             <pre>Content-Type: application/json
 Authorization: &lt;secret&gt;</pre>
             <pre>{{ webhookPayloadExample }}</pre>
           </div>
         </div>
         <template #footer>
-          <div class="dialog-footer">
+          <div class="dialog-footer webhook-dialog-footer">
             <el-switch v-model="webhookStatus" :active-value="0" :inactive-value="1" :active-text="$t('enable')"
                        :inactive-text="$t('disable')"/>
             <div class="webhook-footer-right">
-              <div class="webhook-format-title" @click="webhookFormatShow = !webhookFormatShow">
+              <button type="button" class="webhook-format-title" :aria-expanded="webhookFormatShow"
+                      aria-controls="webhook-format-example" @click="webhookFormatShow = !webhookFormatShow">
                 <span>{{ $t('webhookFormat') }}</span>
-                <Icon class="webhook-format-icon" :class="{ open: webhookFormatShow }" icon="mingcute:down-small-fill" width="18" height="18"/>
-              </div>
-              <el-button :loading="settingLoading" type="primary" @click="webhookSave">
+                <Icon class="webhook-format-icon" :class="{ open: webhookFormatShow }" icon="mingcute:down-small-fill" width="18" height="18" aria-hidden="true"/>
+              </button>
+              <el-button v-perm="'setting:set'" :loading="settingLoading" type="primary" @click="webhookSave">
                 {{ $t('save') }}
               </el-button>
             </div>
@@ -770,11 +723,11 @@ Authorization: &lt;secret&gt;</pre>
               <template #prefix>
                 <span style="margin-right: 10px">{{ $t('icon') }}</span>
               </template>
-              <el-option key="none" label="None" value="none"/>
-              <el-option key="primary" label="Primary" value="primary"/>
-              <el-option key="success" label="Success" value="success"/>
-              <el-option key="warning" label="Warning" value="warning"/>
-              <el-option key="info" label="Info" value="info"/>
+              <el-option key="none" :label="t('noticeTypeNone')" value="none"/>
+              <el-option key="primary" :label="t('noticeTypePrimary')" value="primary"/>
+              <el-option key="success" :label="t('noticeTypeSuccess')" value="success"/>
+              <el-option key="warning" :label="t('noticeTypeWarning')" value="warning"/>
+              <el-option key="info" :label="t('noticeTypeInfo')" value="info"/>
             </el-select>
             <el-select v-model="noticeForm.noticePosition">
               <template #prefix>
@@ -811,19 +764,26 @@ Authorization: &lt;secret&gt;</pre>
             </el-input-number>
           </div>
           <div class="notice-popup-item">
-            <el-input
+            <div v-if="isBuiltInNoticeContent(noticeForm.noticeContent) && !noticeRawEditing"
+                 class="stored-notice-preview">
+              <p>{{ displayNoticeContent(noticeForm.noticeContent, t) }}</p>
+              <el-button text type="primary" :aria-label="`${t('change')} ${t('noticeContentDesc')}`"
+                         @click="noticeRawEditing = true">{{ t('change') }}</el-button>
+            </div>
+            <el-input v-else
                 v-model="noticeForm.noticeContent"
                 :autosize="{ minRows: 15, maxRows: 25 }"
                 type="textarea"
+                :aria-label="t('noticeContentDesc')"
                 :placeholder="t('noticeContentDesc')"
             />
           </div>
         </form>
         <template #footer>
-          <div class="dialog-footer">
+          <div class="dialog-footer notice-dialog-footer">
             <el-switch v-model="noticeForm.notice" :active-value="0" :inactive-value="1" :active-text="$t('enable')"
                        :inactive-text="$t('disable')"/>
-            <div>
+            <div class="notice-footer-actions">
               <el-button @click="previewNoticePopup">
                 {{ $t('preview') }}
               </el-button>
@@ -836,15 +796,15 @@ Authorization: &lt;secret&gt;</pre>
       </el-dialog>
       <el-dialog v-model="addS3Show" :title="t('s3Configuration')" width="340" @closed="resetAddS3Form">
         <form @submit.prevent>
-          <el-input class="dialog-input" type="text" placeholder="Bucket" v-model="s3.bucket" @keyup.enter="saveS3"/>
-          <el-input class="dialog-input" type="text" placeholder="Endpoint" v-model="s3.endpoint" @keyup.enter="saveS3"/>
-          <el-input class="dialog-input" type="text" placeholder="Region" v-model="s3.region" @keyup.enter="saveS3"/>
-          <el-input class="dialog-input" type="text" :placeholder="setting.s3AccessKey || 'Access Key'"
+          <el-input class="dialog-input" type="text" :placeholder="$t('bucket')" v-model="s3.bucket" @keyup.enter="saveS3"/>
+          <el-input class="dialog-input" type="text" :placeholder="$t('endpoint')" v-model="s3.endpoint" @keyup.enter="saveS3"/>
+          <el-input class="dialog-input" type="text" :placeholder="$t('region')" v-model="s3.region" @keyup.enter="saveS3"/>
+          <el-input class="dialog-input" type="text" :placeholder="setting.s3AccessKey || $t('accessKey')"
                     v-model="s3.s3AccessKey" @keyup.enter="saveS3"/>
-          <el-input style="margin-bottom: 10px" type="text" :placeholder="setting.s3SecretKey || 'Secret Key'" v-model="s3.s3SecretKey" @keyup.enter="saveS3"/>
+          <el-input style="margin-bottom: 10px" type="text" :placeholder="setting.s3SecretKey || $t('secretKey')" v-model="s3.s3SecretKey" @keyup.enter="saveS3"/>
           <div class="force-path-style">
             <div class="force-path-style-left">
-              <span>ForcePathStyle</span>
+              <span>{{ $t('forcePathStyle') }}</span>
               <el-tooltip effect="dark" :content="$t('forcePathStyleDesc')">
                 <Icon class="warning" icon="fe:warning" width="18" height="18"/>
               </el-tooltip>
@@ -947,16 +907,14 @@ import loading from "@/components/loading/index.vue";
 import {getTextWidth} from "@/utils/text.js";
 import {fileToBase64} from "@/utils/file-utils.js"
 import {useI18n} from 'vue-i18n';
+import {displayNoticeContent, isBuiltInNoticeContent} from '@/i18n/system-defaults.js';
 import axios from "axios";
 
 defineOptions({
   name: 'sys-setting'
 })
 
-const currentVersion = 'v3.3.0'
-const hasUpdate = ref(false)
-let getUpdateErrorCount = 1;
-const {t, locale} = useI18n();
+const {t} = useI18n();
 const firstLoading = ref(true)
 const settingReady = ref(false)
 const backgroundImage = ref('')
@@ -972,6 +930,7 @@ const r2DomainShow = ref(false)
 const turnstileShow = ref(false)
 const tgSettingShow = ref(false)
 const noticePopupShow = ref(false)
+const noticeRawEditing = ref(false)
 const thirdEmailShow = ref(false)
 const webhookShow = ref(false)
 const forwardRulesShow = ref(false)
@@ -1073,6 +1032,7 @@ const webhookUrl = ref('')
 const webhookStatus = ref(1)
 const webhookRetry = ref(0)
 const webhookSecret = ref('')
+const webhookSecretCleared = ref(false)
 const webhookFormatShow = ref(false)
 const webhookPayloadExample = `{
   "emailId": 1,
@@ -1094,13 +1054,11 @@ const tgMsgFrom = ref('')
 const tgMsgTo = ref('')
 const tgMsgText = ref('')
 
-const tgMsgFromOption = [{label: t('show'), value: 'show'}, {label: t('hide'), value: 'hide'}, {label: t('onlyName'), value:'only-name'}]
-const tgMsgToOption = [{label: t('show'), value: 'show'}, {label: t('hide'), value: 'hide'}]
-const tgMsgTextOption = [{label: t('show'), value: 'show'}, {label: t('hide'), value: 'hide'}]
-const tgMsgLabelWidth = computed(() => locale.value === 'en' ? '120px' : '100px');
+const tgMsgFromOption = computed(() => [{label: t('show'), value: 'show'}, {label: t('hide'), value: 'hide'}, {label: t('onlyName'), value:'only-name'}])
+const tgMsgToOption = computed(() => [{label: t('show'), value: 'show'}, {label: t('hide'), value: 'hide'}])
+const tgMsgTextOption = computed(() => [{label: t('show'), value: 'show'}, {label: t('hide'), value: 'hide'}])
 
 getSettings()
-getUpdate()
 
 function getSettings() {
   settingReady.value = false
@@ -1173,20 +1131,6 @@ const resendList = computed(() => {
   return list;
 });
 
-function getUpdate() {
-  if (getUpdateErrorCount > 5 || !getUpdateErrorCount) return
-  axios.get('https://api.github.com/repos/maillab/cloud-mail/releases/latest').then(({data}) => {
-    hasUpdate.value = data.name !== currentVersion
-    getUpdateErrorCount = 0
-  }).catch(e => {
-    getUpdateErrorCount++
-    setTimeout(() => {
-      getUpdate()
-    }, 2000)
-    console.error('检查更新失败：', e)
-  })
-}
-
 function saveAddVerifyCount() {
   if (!addVerifyCount.value) {
     addVerifyCount.value = 1
@@ -1232,6 +1176,7 @@ function openTgSetting() {
 }
 
 function openNoticePopupSetting() {
+  noticeRawEditing.value = false
   noticePopupShow.value = true
 }
 
@@ -1240,6 +1185,7 @@ function openResendList() {
 }
 
 function resetNoticeForm() {
+  noticeRawEditing.value = false
   noticeForm.notice = setting.value.notice
   noticeForm.noticeContent = setting.value.noticeContent
   noticeForm.noticeDuration = setting.value.noticeDuration
@@ -1275,7 +1221,8 @@ function openWebhookSetting() {
   webhookStatus.value = setting.value.webhookStatus
   webhookUrl.value = setting.value.webhookUrl || ''
   webhookRetry.value = setting.value.webhookRetry ?? 0
-  webhookSecret.value = setting.value.webhookSecret || ''
+  webhookSecret.value = ''
+  webhookSecretCleared.value = false
   webhookShow.value = true
 }
 
@@ -1411,9 +1358,10 @@ function webhookSave() {
   const form = {
     webhookStatus: webhookStatus.value,
     webhookUrl: url,
-    webhookRetry: retry,
-    webhookSecret: webhookSecret.value.trim()
+    webhookRetry: retry
   }
+  if (webhookSecretCleared.value) form.webhookSecret = ''
+  else if (webhookSecret.value.trim()) form.webhookSecret = webhookSecret.value.trim()
   editSetting(form)
 }
 
@@ -1691,6 +1639,7 @@ function change(e) {
   delete settingForm.s3AccessKey
   delete settingForm.s3SecretKey
   delete settingForm.tgBotToken
+  delete settingForm.webhookSecret
   delete settingForm.resendTokens
   editSetting(settingForm, false)
 }
@@ -1860,9 +1809,14 @@ function editSetting(settingForm, refreshStatus = true) {
   gap: 10px;
 }
 
+.setting-value-select {
+  width: clamp(115px, 18vw, 180px);
+  max-width: 100%;
+}
+
 .setting-item {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
   gap: 10px;
   font-weight: normal;
 
@@ -1870,6 +1824,8 @@ function editSetting(settingForm, refreshStatus = true) {
     display: flex;
     align-items: center;
     gap: 5px;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   > div:last-child {
@@ -1877,6 +1833,7 @@ function editSetting(settingForm, refreshStatus = true) {
     grid-template-columns: 1fr auto;
     justify-items: flex-end;
     font-weight: normal;
+    min-width: 0;
   }
 }
 
@@ -1939,13 +1896,36 @@ function editSetting(settingForm, refreshStatus = true) {
   gap: 12px;
 }
 
+.webhook-clear-secret {
+  height: auto;
+  align-self: flex-start;
+  :deep(.el-checkbox__label) {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 540px) {
+  .webhook-dialog-footer { flex-wrap: wrap; gap: 12px; }
+  .webhook-footer-right { width: 100%; justify-content: space-between; }
+}
+
 .webhook-format-title {
   display: inline-flex;
   align-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
   cursor: pointer;
   user-select: none;
   color: var(--el-color-primary);
   font-size: 13px;
+}
+
+.webhook-format-title:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 3px;
 }
 
 .webhook-format-icon {
@@ -1957,6 +1937,38 @@ function editSetting(settingForm, refreshStatus = true) {
 
 .notice-popup-item {
   margin-top: 15px;
+}
+
+.stored-notice-preview {
+  min-height: 100px;
+  padding: 12px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-primary);
+}
+
+.stored-notice-preview p {
+  margin: 0 0 8px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.notice-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  :deep(.el-button + .el-button) {
+    margin-left: 0;
+    margin-inline-start: 0;
+  }
+}
+
+@media (max-width: 540px) {
+  .notice-dialog-footer { flex-wrap: wrap; gap: 12px; }
+  .notice-footer-actions { flex: 1 1 100%; min-width: 0; }
 }
 
 .notice-line-item {
@@ -2109,7 +2121,8 @@ function editSetting(settingForm, refreshStatus = true) {
     align-items: center;
     justify-content: space-between;
     .el-select {
-      width: v-bind(tgMsgLabelWidth);
+      width: clamp(130px, 38vw, 200px);
+      max-width: 60%;
     }
     .el-input-number {
       width: 120px;
@@ -2124,6 +2137,8 @@ function editSetting(settingForm, refreshStatus = true) {
     overflow-x: auto;
     border-radius: 4px;
     background: var(--el-fill-color-light);
+    direction: ltr;
+    text-align: left;
   }
 }
 

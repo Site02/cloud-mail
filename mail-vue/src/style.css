@@ -29,12 +29,12 @@ html, body {
 body {
     font-family: Inter, "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
     line-height: 1.5;
-    color: var(--el-text-color-primary);
+    color: var(--ui-ink);
     font-size: 14px;
 }
 
 html, body {
-    background: var(--el-bg-color);
+    background: var(--ui-bg);
 }
 
 ul, ol {
@@ -50,17 +50,30 @@ img {
 button, input, select, textarea {
     font-family: inherit;
     font-size: inherit;
-    outline: none;
     border: none;
     background: none;
 }
 
-*:focus {
-    outline: none;
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 2px;
 }
 
 .el-message {
-    white-space: nowrap !important;
+    max-width: calc(100vw - 32px);
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+}
+
+.el-message .el-message__content {
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .message-bottom {
@@ -106,12 +119,25 @@ button, input, select, textarea {
 }
 
 :root {
-    --el-color-primary: #1890ff;
-    --el-color-primary-dark-2: #1064c0;
-    --el-color-primary-light-3: #4dabff;
-    --el-color-primary-light-5: #69c0ff;
-    --el-color-primary-light-7: #91d5ff;
-    --el-color-primary-light-9: #e6f7ff;
+    color-scheme: light;
+    --ui-bg: #f5f7fb;
+    --ui-surface: #ffffff;
+    --ui-surface-alt: #edf2f8;
+    --ui-ink: #172432;
+    --ui-muted: #526174;
+    --ui-line: #d3dce6;
+    --ui-primary: #175cd3;
+    --ui-focus: #175cd3;
+    --ui-sidebar: #132b49;
+    --ui-sidebar-ink: #eaf2fb;
+    --ui-success: #187a5d;
+    --ui-danger: #b42332;
+    --el-color-primary: #175cd3;
+    --el-color-primary-dark-2: #10469f;
+    --el-color-primary-light-3: #5d8be0;
+    --el-color-primary-light-5: #8faeea;
+    --el-color-primary-light-7: #bdd1f3;
+    --el-color-primary-light-9: #e9f0fd;
 
     --extra-light-fill: #FAFCFF;
     --settings-page-background: #fafbfc;
@@ -128,12 +154,12 @@ button, input, select, textarea {
     --aside-right-border: 3px 0 5px rgba(0, 21, 41, .35);
     --choose-account-background: var(--el-color-primary-light-8);
     --el-text-color-regular: var(--el-text-color-primary);
-    --email-scroll-content-color: rgba(25, 41, 59, 0.4);
+    --email-scroll-content-color: #526174;
     --email-hover-background: #F2F6FC;
     --email-right-click-background: #FDF6EC;
     --login-border: none;
     --form-desc-color: #71717a;
-    --login-switch-color: #006be6;
+    --login-switch-color: #175cd3;
     --scrollbar-track-color: #A8ABB2;
     --base-border-color: #DCDFE6;
     --secondary-text-color: #909399;
@@ -146,6 +172,20 @@ button, input, select, textarea {
 }
 
 .dark {
+    color-scheme: dark;
+    --ui-bg: #0d1420;
+    --ui-surface: #151f2c;
+    --ui-surface-alt: #1d2b3b;
+    --ui-ink: #eff3f8;
+    --ui-muted: #a7b5c5;
+    --ui-line: #364657;
+    --ui-primary: #2563eb;
+    --ui-focus: #8cc4ff;
+    --ui-sidebar: #0a1422;
+    --ui-sidebar-ink: #eff3f8;
+    --ui-success: #47caa0;
+    --ui-danger: #ff8491;
+    --el-color-primary: #2563eb;
     --extra-light-fill: #191919;
     --settings-page-background: var(--extra-light-fill);
     --light-ill: #262727;
@@ -160,7 +200,7 @@ button, input, select, textarea {
     --light-border-color: #414243;
     --aside-right-border: 3px 0 5px #0A0A0A;
     --choose-account-background: #39393A;
-    --email-scroll-content-color: rgba(255, 255, 255, 0.3);
+    --email-scroll-content-color: #a7b5c5;
     --email-hover-background: #1D1E1F;
     --email-right-click-background: var(--email-hover-background);
     --login-border: none;
@@ -215,4 +255,16 @@ html[data-theme-to="light"]::view-transition-old(root) {
 @keyframes vt-radial-out {
     from { clip-path: circle(var(--vt-end-radius, 0px) at var(--vt-x) var(--vt-y)); }
     to   { clip-path: circle(0px at var(--vt-x) var(--vt-y)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html.dark,
+    html:not(.dark) {
+        view-transition-name: none;
+    }
+
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+        animation: none !important;
+    }
 }

@@ -29,7 +29,7 @@ const settingService = {
 		const setting = await c.env.kv.get(KvConst.SETTING, { type: 'json' });
 
 		if (!setting) {
-			throw new BizError('数据库未初始化 Database not initialized.');
+			throw new BizError(t(c, 'dbUninitialized'));
 		}
 
 		let domainList = c.env.domain;
@@ -38,12 +38,12 @@ const settingService = {
 			try {
 				domainList = JSON.parse(domainList)
 			} catch (error) {
-				throw new BizError(t('notJsonDomain'));
+				throw new BizError(t(c, 'notJsonDomain'));
 			}
 		}
 
 		if (!c.env.domain) {
-			throw new BizError(t('noDomainVariable'));
+			throw new BizError(t(c, 'noDomainVariable'));
 		}
 
 		domainList = domainList.map(item => '@' + item);
@@ -66,12 +66,28 @@ const settingService = {
 		return setting;
 	},
 
+	async deletionMode(c) {
+		const row = await orm(c).select({syncDelete: setting.syncDelete}).from(setting).get();
+		if (row?.syncDelete !== 0 && row?.syncDelete !== 1) {
+			throw new BizError(t(c, 'dbUninitialized'));
+		}
+		return row.syncDelete;
+	},
+
 	async get(c, showSiteKey = false) {
 
-		const [settingRow, recordList] = await Promise.all([
-			await this.query(c),
-			verifyRecordService.selectListByIP(c)
+		const [settingData, recordList, syncDelete] = await Promise.all([
+			this.query(c),
+			verifyRecordService.selectListByIP(c),
+			this.deletionMode(c)
 		]);
+		const settingRow = {
+			...settingData,
+			syncDelete,
+			resendTokens: {...settingData.resendTokens},
+			webhookSecretConfigured: Boolean(settingData.webhookSecret)
+		};
+		delete settingRow.webhookSecret;
 
 
 		if (!showSiteKey) {
@@ -162,6 +178,9 @@ const settingService = {
 		if (background && !background.startsWith('http')) {
 
 			const file = fileUtils.base64ToFile(background)
+			if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+				throw new BizError(t(c, 'invalidBackgroundImage'), 400);
+			}
 
 			const arrayBuffer = await file.arrayBuffer();
 			background = constant.BACKGROUND_PREFIX + await fileUtils.getBuffHash(arrayBuffer) + fileUtils.getExtFileName(file.name);
@@ -190,11 +209,14 @@ const settingService = {
 
 	async websiteConfig(c) {
 
-		const settingRow = await this.get(c, true);
-		const token = await userContext.getToken(c);
+		const [settingRow, token] = await Promise.all([
+			this.get(c, true),
+			userContext.getToken(c)
+		]);
 
 		return {
 			register: settingRow.register,
+			syncDelete: settingRow.syncDelete,
 			title: settingRow.title,
 			manyEmail: settingRow.manyEmail,
 			addEmail: settingRow.addEmail,

@@ -23,45 +23,45 @@ const accountService = {
 
 
 		if (!(addEmail === settingConst.addEmail.OPEN && manyEmail === settingConst.manyEmail.OPEN)) {
-			throw new BizError(t('addAccountDisabled'));
+			throw new BizError(t(c, 'addAccountDisabled'));
 		}
 
 
 		if (!email) {
-			throw new BizError(t('emptyEmail'));
+			throw new BizError(t(c, 'emptyEmail'));
 		}
 
 		if (!verifyUtils.isEmail(email)) {
-			throw new BizError(t('notEmail'));
+			throw new BizError(t(c, 'notEmail'));
 		}
 
 		if (!c.env.domain.includes(emailUtils.getDomain(email))) {
-			throw new BizError(t('notExistDomain'));
+			throw new BizError(t(c, 'notExistDomain'));
 		}
 
 		if (emailUtils.getName(email).length < minEmailPrefix) {
-			throw new BizError(t('minEmailPrefix', { msg: minEmailPrefix } ));
+			throw new BizError(t(c, 'minEmailPrefix', { msg: minEmailPrefix } ));
 		}
 
 		if (emailPrefixFilter.some(content => emailUtils.getName(email).includes(content))) {
-			throw new BizError(t('banEmailPrefix'));
+			throw new BizError(t(c, 'banEmailPrefix'));
 		}
 
 		let accountRow = await this.selectByEmailIncludeDel(c, email);
 
 		if (accountRow && accountRow.isDel === isDel.DELETE) {
-			throw new BizError(t('isDelAccount'));
+			throw new BizError(t(c, 'isDelAccount'));
 		}
 
 		if (accountRow) {
-			throw new BizError(t('isRegAccount'));
+			throw new BizError(t(c, 'isRegAccount'));
 		}
 
 		if (email.includes('+')) {
 			const baseEmail = emailUtils.getBaseEmail(email);
 			const baseAccount = await this.selectByEmailIncludeDel(c, baseEmail);
 			if (!baseAccount || baseAccount.userId !== userId) {
-				throw new BizError(t('notOwner'));
+				throw new BizError(t(c, 'notOwner'));
 			}
 		}
 
@@ -72,11 +72,11 @@ const accountService = {
 
 			if (roleRow.accountCount > 0) {
 				const userAccountCount = await accountService.countUserAccount(c, userId)
-				if(userAccountCount >= roleRow.accountCount) throw new BizError(t('accountLimit'), 403);
+				if(userAccountCount >= roleRow.accountCount) throw new BizError(t(c, 'accountLimit'), 403);
 			}
 
 			if(!roleService.hasAvailDomainPerm(roleRow.availDomain, email)) {
-				throw new BizError(t('noDomainPermAdd'),403)
+				throw new BizError(t(c, 'noDomainPermAdd'),403)
 			}
 
 		}
@@ -97,6 +97,9 @@ const accountService = {
 
 
 		accountRow = await orm(c).insert(account).values({ email: email, userId: userId, name: emailUtils.getName(email) }).returning().get();
+
+		// 这个地址此前收到的信在「无收件人」里，一并收编进新邮箱
+		accountRow.claimedCount = await emailService.claimNoOne(c, accountRow.email, userId, accountRow.accountId);
 
 		if (addEmailVerify === settingConst.addEmailVerify.COUNT && !addVerifyOpen) {
 			const row = await verifyRecordService.increaseAddCount(c);
@@ -156,14 +159,14 @@ const accountService = {
 		const accountRow = await this.selectById(c, accountId);
 
 		if (accountRow.email === user.email) {
-			throw new BizError(t('delMyAccount'));
+			throw new BizError(t(c, 'delMyAccount'));
 		}
 
 		if (accountRow.userId !== user.userId) {
-			throw new BizError(t('noUserAccount'));
+			throw new BizError(t(c, 'noUserAccount'));
 		}
 
-		const { syncDelete } = await settingService.query(c);
+		const syncDelete = await settingService.deletionMode(c);
 		if (syncDelete === settingConst.syncDelete.OPEN) {
 			await this.physicsDelete(c, { accountId });
 			return;
@@ -226,7 +229,7 @@ const accountService = {
 	async setName(c, params, userId) {
 		const { name, accountId } = params
 		if (name.length > 30) {
-			throw new BizError(t('usernameLengthLimit'));
+			throw new BizError(t(c, 'usernameLengthLimit'));
 		}
 		await orm(c).update(account).set({name}).where(and(eq(account.userId, userId),eq(account.accountId, accountId))).run();
 	},

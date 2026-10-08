@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
-import { EmailUnreadEnum } from '@/enums/email-enum.js'
+import { EmailUnreadEnum } from '../enums/email-enum.js'
+import {loadCompleteMailPage} from '../utils/mail-recovery.js'
+import {useWriterStore} from './writer.js'
 
 export const useEmailStore = defineStore('email', {
     state: () => ({
@@ -10,6 +12,7 @@ export const useEmailStore = defineStore('email', {
         addStarEmailId: 0,
         contentData: {
             email: null,
+            sourceRoute: null,
             delType: null,
             showStar: true,
             showReply: true,
@@ -17,20 +20,34 @@ export const useEmailStore = defineStore('email', {
         },
         sendScroll: null,
         detailMap: {},
+        sessionUserId: 0,
+        sessionRevision: 0,
     }),
     persist: {
-        pick: ['contentData'],
+        pick: ['contentData', 'sessionUserId'],
     },
     actions: {
+        clearPrivateSession() {
+            useWriterStore().setSessionUser(0)
+            const revision = this.sessionRevision + 1
+            this.$reset()
+            this.sessionRevision = revision
+        },
+        setSessionUser(userId) {
+            const id = Number(userId)
+            if (!Number.isSafeInteger(id) || id <= 0) {
+                this.clearPrivateSession()
+                return
+            }
+            if (id !== this.sessionUserId) this.clearPrivateSession()
+            this.sessionUserId = id
+            useWriterStore().setSessionUser(id)
+        },
         fetchList(request) {
-            return request(0).then(data => {
-                request(1).then(fullData => {
-                    const list = Array.isArray(fullData) ? fullData : fullData?.list
-                    this.applyFullList(list)
-                }).catch(e => {
-                    console.error(e)
-                })
-                return data
+            const revision = this.sessionRevision
+            return loadCompleteMailPage(request, list => {
+                if (revision !== this.sessionRevision) throw new Error('Mail session changed')
+                this.applyFullList(list)
             })
         },
         applyFullList(list) {

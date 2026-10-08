@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 const app = new Hono();
 
 import result from '../model/result';
+import {t} from '../i18n/i18n.js';
 import { cors } from 'hono/cors';
 
 app.use('*', cors());
@@ -14,24 +15,23 @@ app.onError((err, c) => {
 	}
 
 	if (err.message === `Cannot read properties of undefined (reading 'get')`) {
-		return c.json(result.fail('KV数据库未绑定<br/>KV database not bound',502));
+		return c.json(result.fail(t(c, 'kvNotBound'),502));
 	}
 
 	if (err.message === `Cannot read properties of undefined (reading 'put')`) {
-		return c.json(result.fail('KV数据库未绑定<br/>KV database not bound',502));
+		return c.json(result.fail(t(c, 'kvNotBound'),502));
 	}
 
 	if (err.message === `Cannot read properties of undefined (reading 'prepare')`) {
-		return c.json(result.fail('D1数据库未绑定<br/>D1 database not bound',502));
+		return c.json(result.fail(t(c, 'dbNotBound'),502));
 	}
 
 	if (err.message?.includes('D1_ERROR: no such column')) {
-		return c.json(result.fail('请按照文档更新数据库<br/>Please update the database as documented',502));
+		return c.json(result.fail(t(c, 'dbNeedsUpdate'),502));
 	}
 
-	return c.json(result.fail(err.message, err.code));
+	return c.json(result.fail(err.name === 'BizError' ? err.message : t(c, 'serverError'),
+		err.name === 'BizError' ? err.code : 500));
 });
 
 export default app;
-
-

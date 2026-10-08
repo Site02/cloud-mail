@@ -1,27 +1,39 @@
 <template>
   <div class="account-box">
     <div class="head-opt">
-      <Icon v-perm="'account:add'" class="icon add" icon="ion:add-outline" width="23" height="23" @click="add"/>
-      <Icon class="icon refresh" icon="ion:reload" width="18" height="18" @click="refresh"/>
+      <button v-perm="'account:add'" type="button" class="icon-button" :aria-label="t('addAccount')"
+              :title="t('addAccount')" @click="add">
+        <Icon icon="ion:add-outline" width="22" height="22" aria-hidden="true"/>
+      </button>
+      <button type="button" class="icon-button" :aria-label="t('refreshMail')" :title="t('refreshMail')" @click="refresh">
+        <Icon icon="ion:reload" width="18" height="18" aria-hidden="true"/>
+      </button>
     </div>
     <el-scrollbar class="scrollbar" ref="scrollbarRef">
+      <div v-if="accountError" class="account-error" role="alert">
+        <span>{{ t('reqFailErrorMsg') }}</span>
+        <button type="button" @click="retryAccounts">{{ t('pwa.retry') }}</button>
+      </div>
       <div v-infinite-scroll="getAccountList" :infinite-scroll-distance="600" :infinite-scroll-immediate="false">
-        <el-card class="item" :class="itemBg(item.accountId)" v-for="(item, index) in accounts" :key="item.accountId"
-                 @click="changeAccount(item)">
-          <div class="account">
-            {{ item.email }}
-          </div>
+        <div class="item" :class="itemBg(item.accountId)" v-for="(item, index) in accounts" :key="item.accountId">
+          <button type="button" class="account-main" :aria-current="accountStore.currentAccountId === item.accountId ? 'true' : undefined"
+                  @click="changeAccount(item)">
+            <span dir="ltr">{{ item.email }}</span>
+          </button>
           <div class="opt">
-            <div class="send-email" @click.stop>
-              <Icon @click="setAllReceive(item)" v-if="!item.allReceive" icon="eva:email-fill" width="22" height="22" color="#fccb1a"/>
-              <Icon @click="setAllReceive(item)" v-else icon="flat-color-icons:folder" width="22" height="22" color="#23c4f1" />
-            </div>
-            <div class="settings" @click.stop>
-              <Icon icon="fluent-color:clipboard-24" width="22" height="22" @click.stop="copyAccount(item.email)"/>
-              <Icon icon="fluent:settings-24-filled" width="21" height="21" color="#909399"
-                    v-if="showNullSetting(item)"/>
-              <el-dropdown v-else>
-                <Icon icon="fluent:settings-24-filled" width="21" height="21" color="#909399"/>
+            <button type="button" class="icon-button" :aria-label="`${t('allMail')}: ${item.email}`"
+                    :title="t('allMail')" :aria-pressed="!!item.allReceive" @click="setAllReceive(item)">
+              <Icon :icon="item.allReceive ? 'flat-color-icons:folder' : 'eva:email-fill'" width="21" height="21" aria-hidden="true"/>
+            </button>
+            <div class="settings">
+              <button type="button" class="icon-button" :aria-label="`${t('copy')}: ${item.email}`"
+                      :title="t('copy')" @click="copyAccount(item.email)">
+                <Icon icon="fluent-color:clipboard-24" width="21" height="21" aria-hidden="true"/>
+              </button>
+              <el-dropdown v-if="!showNullSetting(item)" trigger="click">
+                <button type="button" class="icon-button" :aria-label="`${t('settings')}: ${item.email}`" :title="t('settings')">
+                  <Icon icon="fluent:settings-24-filled" width="20" height="20" aria-hidden="true"/>
+                </button>
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item v-if="hasPerm('email:send')" @click="openSetName(item)">{{ $t('rename') }}</el-dropdown-item>
@@ -34,7 +46,7 @@
               </el-dropdown>
             </div>
           </div>
-        </el-card>
+        </div>
 
         <!-- Initial Loading Skeleton -->
         <template v-if="loading">
@@ -100,9 +112,13 @@
             </div>
           </template>
         </el-input>
-        <el-button class="btn" type="primary" @click="submit" :loading="addLoading"
-        >{{ $t('add') }}
-        </el-button>
+        <div class="add-actions">
+          <el-button @click="randomPrefix">
+            <Icon icon="mingcute:refresh-2-line" width="16" height="16" style="margin-right: 4px"/>
+            {{ t('generateRandom') }}
+          </el-button>
+          <el-button type="primary" @click="submit" :loading="addLoading">{{ $t('add') }}</el-button>
+        </div>
       </div>
       <div
           class="add-email-turnstile"
@@ -157,6 +173,7 @@ const domainList = computed(() => settingStore.domainList)
 const accounts = reactive([])
 const noLoading = ref(false)
 const loading = ref(false)
+const accountError = ref(false)
 const followLoading = ref(false);
 const verifyShow = ref(false)
 const setNameShow = ref(false)
@@ -274,12 +291,11 @@ function openSetName(accountItem) {
 
 function setAllReceive(account) {
   let allReceiveAccount = accounts.find(account => account.allReceive === AccountAllReceiveEnum.ENABLED);
+  const previousValue = account.allReceive
+  const previousAllReceive = allReceiveAccount?.allReceive
   if (allReceiveAccount && allReceiveAccount.accountId !== account.accountId) allReceiveAccount.allReceive = AccountAllReceiveEnum.DISABLED;
   account.allReceive = account.allReceive === AccountAllReceiveEnum.DISABLED ? AccountAllReceiveEnum.ENABLED : AccountAllReceiveEnum.DISABLED;
-  accountSetAllReceive(account.accountId).catch(() => {
-    account.allReceive = account.allReceive === AccountAllReceiveEnum.DISABLED ? AccountAllReceiveEnum.ENABLED : AccountAllReceiveEnum.DISABLED;
-    if (allReceiveAccount) allReceiveAccount.allReceive = AccountAllReceiveEnum.ENABLED;
-  }).then(() => {
+  accountSetAllReceive(account.accountId).then(() => {
     if (account.allReceive === AccountAllReceiveEnum.ENABLED) {
       ElMessage({
         message: t('setSuccess'),
@@ -290,6 +306,10 @@ function setAllReceive(account) {
     changeAccount(account);
     emailStore.emailScroll?.refreshList();
     emailStore.sendScroll?.refreshList();
+  }).catch(() => {
+    account.allReceive = previousValue
+    if (allReceiveAccount) allReceiveAccount.allReceive = previousAllReceive
+    ElMessage({ message: t('reqFailErrorMsg'), type: 'error', plain: true })
   })
 }
 
@@ -325,6 +345,9 @@ function remove(account) {
   });
 }
 
+// 顶栏一键生成邮箱后，把新地址同步进这个列表
+watch(() => accountStore.newAccountSignal, () => refresh())
+
 function refresh() {
   if (loading.value) {
     return
@@ -332,11 +355,17 @@ function refresh() {
   loading.value = false
   followLoading.value = false
   noLoading.value = false
+  accountError.value = false
   queryParams.accountId = 0
   queryParams.lastSort = null
   getSkeletonRows();
-  scrollbarRef.value.setScrollTop(0)
+  scrollbarRef.value?.setScrollTop(0)
   accounts.splice(0, accounts.length)
+  getAccountList()
+}
+
+function retryAccounts() {
+  accountError.value = false
   getAccountList()
 }
 
@@ -367,6 +396,14 @@ function setAsTop(account, index) {
   });
 }
 
+// 随机前缀。字符集去掉 0/1/i/l/o，念出来或手抄时不会认错
+function randomPrefix() {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789'
+  const buf = new Uint32Array(10)
+  crypto.getRandomValues(buf)
+  addForm.email = Array.from(buf, n => chars[n % chars.length]).join('')
+}
+
 async function copyAccount(account) {
   try {
     await navigator.clipboard.writeText(account);
@@ -387,7 +424,7 @@ async function copyAccount(account) {
 
 function getAccountList() {
 
-  if (loading.value || followLoading.value || noLoading.value) return;
+  if (loading.value || followLoading.value || noLoading.value || accountError.value) return;
 
   if (accounts.length === 0) {
     loading.value = true
@@ -411,7 +448,7 @@ function getAccountList() {
     if (list.length < queryParams.size) {
       noLoading.value = true
     }
-    if (accounts.length === 0) {
+    if (accounts.length === 0 && list.length > 0) {
       accountStore.currentAccount = list[0]
     }
 
@@ -423,6 +460,7 @@ function getAccountList() {
   }).catch(() => {
     loading.value = false
     followLoading.value = false
+    accountError.value = true
   })
 }
 
@@ -490,8 +528,10 @@ function submit() {
     accounts.push(account)
     verifyToken = ''
     settingStore.settings.addVerifyOpen = account.addVerifyOpen
+    // 添加完多半是要马上去某个站粘贴，顺手放进剪贴板；失败就当没这回事
+    navigator.clipboard?.writeText(account.email).catch(() => {})
     ElMessage({
-      message: t('addSuccessMsg'),
+      message: t('addSuccessMsg') + '：' + account.email,
       type: "success",
       plain: true
     })
@@ -521,19 +561,33 @@ path[fill="#ffdda1"] {
 </style>
 <style scoped lang="scss">
 .account-box {
-
-  border-right: 1px solid var(--el-border-color) !important;
-  background-color: var(--el-bg-color);
+  border-inline-end: 1px solid var(--ui-line, var(--el-border-color)) !important;
+  background-color: var(--ui-surface, var(--el-bg-color));
   height: 100%;
   overflow: hidden;
 
   .head-opt {
     display: flex;
     align-items: center;
-    height: 38px;
-    box-shadow: var(--header-actions-border);
-    padding-left: 10px;
-    padding-right: 10px;
+    height: 56px;
+    gap: 4px;
+    border-bottom: 1px solid var(--ui-line, var(--el-border-color));
+    padding-inline: 10px;
+
+    .icon-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--ui-ink, var(--el-text-color-primary));
+      cursor: pointer;
+    }
+
+    .icon-button:hover { background: var(--ui-surface-alt, var(--el-fill-color-light)); }
 
     .icon {
       cursor: pointer;
@@ -554,10 +608,10 @@ path[fill="#ffdda1"] {
 
   .scrollbar {
     width: 100%;
-    height: calc(100% - 38px);
+    height: calc(100% - 56px);
     overflow: auto;
     @media (max-width: 767px) {
-      height: calc(100% - 98px);
+      height: calc(100% - 56px);
     }
 
     .empty {
@@ -576,23 +630,70 @@ path[fill="#ffdda1"] {
     }
   }
 
+  .account-error {
+    display: grid;
+    gap: 8px;
+    padding: 14px;
+    border-bottom: 1px solid var(--ui-line, var(--el-border-color));
+    color: var(--ui-ink, var(--el-text-color-primary));
+    font-size: 14px;
+    button {
+      justify-self: start;
+      min-height: 36px;
+      padding: 6px 12px;
+      border: 1px solid var(--ui-line, var(--el-border-color));
+      border-radius: 7px;
+      background: var(--ui-surface, var(--el-bg-color));
+      color: var(--ui-ink, var(--el-text-color-primary));
+      cursor: pointer;
+    }
+  }
+
   .btn {
     width: 100%;
     margin-top: 15px;
   }
 
   .item {
-    background-color: var(--el-bg-color);
-    border-radius: 8px;
-    padding: 10px;
-    margin-bottom: 11px;
-    margin-left: 10px;
-    margin-right: 10px;
-    cursor: pointer;
+    background-color: var(--ui-surface, var(--el-bg-color));
+    border-bottom: 1px solid var(--ui-line, var(--el-border-color));
+    padding: 7px 12px;
+    margin: 0;
+    min-height: 72px;
+
+    .account-main {
+      display: block;
+      width: 100%;
+      min-height: 32px;
+      padding: 0 3px;
+      border: 0;
+      background: transparent;
+      color: var(--ui-ink, var(--el-text-color-primary));
+      font: inherit;
+      font-weight: 650;
+      text-align: start;
+      cursor: pointer;
+      > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    }
+
+    .icon-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--ui-muted, var(--el-text-color-regular));
+      cursor: pointer;
+    }
+
+    .icon-button:hover { background: var(--ui-surface-alt, var(--el-fill-color-light)); }
 
     .account {
-      font-weight: 400;
-      font-size: 15px;
+      font-weight: 600;
       margin-bottom: 20px;
       overflow: hidden;
       white-space: nowrap;
@@ -602,8 +703,7 @@ path[fill="#ffdda1"] {
     .opt {
       display: flex;
       justify-content: space-between;
-      font-size: 12px;
-      color: #888;
+      color: var(--ui-muted, var(--el-text-color-regular));
 
       .settings {
         display: flex;
@@ -617,24 +717,39 @@ path[fill="#ffdda1"] {
       }
     }
 
-    :deep(.el-card__body) {
-      padding: 0;
-    }
   }
 
   .item:first-child {
-    margin-top: 10px;
+    margin-top: 0;
   }
 
   .item-choose {
-    background: var(--choose-account-background);
+    background: var(--ui-surface-alt, var(--choose-account-background));
+    border-inline-start: 3px solid var(--ui-primary, var(--el-color-primary));
+    padding-inline-start: 9px;
   }
+}
+
+.account-box button:focus-visible {
+  outline: 2px solid var(--ui-focus, var(--el-color-primary));
+  outline-offset: -2px;
 }
 
 
 .setting-icon {
   position: relative;
   top: 6px;
+}
+
+.add-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.add-actions .el-button {
+  flex: 1;
+  margin: 0;
 }
 
 :deep(.el-input-group__append) {

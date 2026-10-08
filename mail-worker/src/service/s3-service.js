@@ -65,7 +65,7 @@ const s3Service = {
 		);
 
 
-		await client.send(
+		const response = await client.send(
 			new DeleteObjectsCommand({
 				Bucket: bucket,
 				Delete: {
@@ -73,6 +73,15 @@ const s3Service = {
 				}
 			})
 		);
+		if (response?.Errors?.length) {
+			const details = response.Errors.slice(0, 5).map(({Key, Code}) => `${Key || 'unknown'} (${Code || 'unknown'})`).join(', ');
+			throw new Error(`S3 object deletion failed for ${response.Errors.length} object(s): ${details}`);
+		}
+		const confirmedKeys = new Set((response?.Deleted || []).map(({Key}) => Key));
+		const unconfirmedKeys = keys.filter(key => !confirmedKeys.has(key));
+		if (unconfirmedKeys.length) {
+			throw new Error(`S3 object deletion has no confirmation for ${unconfirmedKeys.length} object(s): ${unconfirmedKeys.slice(0, 5).join(', ')}`);
+		}
 	},
 
 	async getObj(c, key) {

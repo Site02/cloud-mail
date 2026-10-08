@@ -120,7 +120,7 @@ import {Icon} from "@iconify/vue";
   top: 2px;
 }
 
-@media (max-width: 1366px) {
+@container (max-width: 640px) {
   .pc-star {
     display: none;
   }

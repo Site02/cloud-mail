@@ -101,11 +101,11 @@ const publicService = {
 
 		for (const emailRow of list) {
 			if (!verifyUtils.isEmail(emailRow.email)) {
-				throw new BizError(t('notEmail'));
+				throw new BizError(t(c, 'notEmail'));
 			}
 
 			if (!c.env.domain.includes(emailUtils.getDomain(emailRow.email))) {
-				throw new BizError(t('notEmailDomain'));
+				throw new BizError(t(c, 'notEmailDomain'));
 			}
 
 			const { salt, hash } = await saltHashUtils.hashPassword(
@@ -135,14 +135,13 @@ const publicService = {
 				type = roleRow ? roleRow.roleId : type;
 			}
 
-			const userSql = `INSERT INTO user (email, password, salt, type, os, browser, active_ip, create_ip, device, active_time, create_time)
-			VALUES ('${email}', '${hash}', '${salt}', '${type}', '${os}', '${browser}', '${activeIp}', '${activeIp}', '${device}', '${activeTime}', '${activeTime}')`
-
-			const accountSql = `INSERT INTO account (email, name, user_id)
-			VALUES ('${email}', '${emailUtils.getName(email)}', 0);`;
-
-			userList.push(c.env.db.prepare(userSql));
-			userList.push(c.env.db.prepare(accountSql));
+			userList.push(c.env.db.prepare(
+				`INSERT INTO user (email, password, salt, type, os, browser, active_ip, create_ip, device, active_time, create_time)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			).bind(email, hash, salt, type, os, browser, activeIp, activeIp, device, activeTime, activeTime));
+			userList.push(c.env.db.prepare(
+				'INSERT INTO account (email, name, user_id) VALUES (?, ?, 0)'
+			).bind(email, emailUtils.getName(email)));
 
 		}
 
@@ -152,7 +151,7 @@ const publicService = {
 			await c.env.db.batch(userList);
 		} catch (e) {
 			if(e.message.includes('SQLITE_CONSTRAINT')) {
-				throw new BizError(t('emailExistDatabase'))
+				throw new BizError(t(c, 'emailExistDatabase'))
 			} else {
 				throw e
 			}
@@ -178,15 +177,15 @@ const publicService = {
 		const userRow = await userService.selectByEmailIncludeDel(c, email);
 
 		if (email !== c.env.admin) {
-			throw new BizError(t('notAdmin'));
+			throw new BizError(t(c, 'notAdmin'));
 		}
 
 		if (!userRow || userRow.isDel === isDel.DELETE) {
-			throw new BizError(t('notExistUser'));
+			throw new BizError(t(c, 'notExistUser'));
 		}
 
 		if (!await cryptoUtils.verifyPassword(password, userRow.salt, userRow.password)) {
-			throw new BizError(t('IncorrectPwd'));
+			throw new BizError(t(c, 'IncorrectPwd'));
 		}
 	}
 

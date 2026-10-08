@@ -14,10 +14,10 @@ const starService = {
 		const { emailId } = params;
 		const email = await emailService.selectById(c, emailId);
 		if (!email) {
-			throw new BizError(t('starNotExistEmail'));
+			throw new BizError(t(c, 'starNotExistEmail'));
 		}
 		if (email.userId !== userId) {
-			throw new BizError(t('starNotExistEmail'));
+			throw new BizError(t(c, 'starNotExistEmail'));
 		}
 		const exist = await orm(c).select().from(star).where(
 			and(

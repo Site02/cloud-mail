@@ -1,31 +1,42 @@
 <template>
   <div class="header" :class="!hasPerm('email:send') ? 'not-send' : ''">
     <div class="header-btn">
-      <hanburger @click="changeAside"></hanburger>
+      <button type="button" class="menu-toggle" :aria-label="t('toggleNavigation')"
+              :aria-expanded="uiStore.asideShow" aria-controls="mail-sidebar" @click="changeAside">
+        <hanburger :is-active="uiStore.asideShow" />
+      </button>
       <span class="breadcrumb-item">{{ $t(route.meta.title) }}</span>
     </div>
-    <div v-perm="'email:send'" class="writer-box" @click="openSend">
+    <button v-perm="'email:send'" type="button" class="writer-box" :aria-label="t('sendEmail')"
+            :title="t('sendEmail')" @click="openSend">
       <div class="writer">
-        <Icon icon="material-symbols:edit-outline-sharp" width="22" height="22"/>
+        <Icon icon="material-symbols:edit-outline-sharp" width="22" height="22" aria-hidden="true"/>
       </div>
-    </div>
+    </button>
     <div class="toolbar">
-      <div v-if="uiStore.dark" class="sun-icon icon-item" @click="openDark($event)">
-        <Icon icon="mingcute:sun-fill"/>
-      </div>
-      <div v-else class="dark-icon icon-item" @click="openDark($event)">
-        <Icon icon="solar:moon-linear"/>
-      </div>
-      <div class="notice icon-item" @click="openNotice">
-        <Icon icon="streamline-plump:announcement-megaphone"/>
-      </div>
+      <LanguageSelect v-model="settingStore.lang" class="header-language" />
+      <LanguageSelect v-model="settingStore.lang" class="language-mobile" />
+      <AppInstallButton compact />
+      <button v-if="uiStore.dark" type="button" class="sun-icon icon-item"
+              :aria-label="t('enableLightMode')" :title="t('enableLightMode')" @click="openDark($event)">
+        <Icon icon="mingcute:sun-fill" aria-hidden="true"/>
+      </button>
+      <button v-else type="button" class="dark-icon icon-item"
+              :aria-label="t('enableDarkMode')" :title="t('enableDarkMode')" @click="openDark($event)">
+        <Icon icon="solar:moon-linear" aria-hidden="true"/>
+      </button>
+      <button type="button" class="notice icon-item" :aria-label="t('noticeTitle')"
+              :title="t('noticeTitle')" @click="openNotice">
+        <Icon icon="streamline-plump:announcement-megaphone" aria-hidden="true"/>
+      </button>
       <el-dropdown ref="userinfoRef" @visible-change="e => userInfoShow = e" :teleported="false" popper-class="detail-dropdown">
-        <div class="avatar" @click="userInfoHide" >
+        <button type="button" class="avatar" :aria-label="t('profile')" aria-haspopup="menu"
+                :aria-expanded="userInfoShow" @click="userInfoHide" >
           <div class="avatar-text">
             <div>{{ formatName(userStore.user.email) }}</div>
           </div>
-          <Icon class="setting-icon" icon="mingcute:down-small-fill" width="24" height="24"/>
-        </div>
+          <Icon class="setting-icon" icon="mingcute:down-small-fill" width="24" height="24" aria-hidden="true"/>
+        </button>
         <template #dropdown>
           <div class="user-details">
             <div class="details-avatar">
@@ -34,11 +45,13 @@
             <div class="user-name">
               {{ userStore.user.name }}
             </div>
-            <div class="detail-email" @click="copyEmail(userStore.user.email)">
-              {{ userStore.user.email }}
-            </div>
+            <button type="button" class="detail-email" :aria-label="`${t('copy')}: ${userStore.user.email}`"
+                    :title="t('copy')" @click="copyEmail(userStore.user.email)">
+              <span dir="ltr">{{ userStore.user.email }}</span>
+            </button>
             <div class="detail-user-type">
-              <el-tag>{{ userStore.user.role.name }}</el-tag>
+              <el-tag>{{ userStore.user.type === 0 && userStore.user.role?.name === 'admin'
+                ? t('admin') : displayRoleName(userStore.user.role, t) }}</el-tag>
             </div>
             <div class="action-info">
               <div>
@@ -73,8 +86,11 @@
 </template>
 
 <script setup>
+import {useEmailStore} from '@/store/email.js'
 import router from "@/router";
 import hanburger from '@/components/hamburger/index.vue'
+import AppInstallButton from '@/components/app-install-button/index.vue'
+import LanguageSelect from '@/components/language-select/index.vue'
 import {logout} from "@/request/login.js";
 import {Icon} from "@iconify/vue";
 import {useUiStore} from "@/store/ui.js";
@@ -84,7 +100,7 @@ import {computed, ref} from "vue";
 import {useSettingStore} from "@/store/setting.js";
 import {hasPerm} from "@/perm/perm.js"
 import {useI18n} from "vue-i18n";
-import {setExtend} from "@/utils/day.js"
+import {displayRoleName} from '@/i18n/system-defaults.js';
 
 const {t} = useI18n();
 const route = useRoute();
@@ -182,11 +198,6 @@ async function copyEmail(email) {
   }
 }
 
-function changeLang(lang) {
-  setExtend(lang === 'en' ? 'en' : 'zh-cn')
-  settingStore.lang = lang
-}
-
 function openNotice() {
   uiStore.showNotice()
 }
@@ -196,7 +207,7 @@ function openDark(e) {
   const nextIsDark = !uiStore.dark
   const root = document.documentElement
 
-  if (!document.startViewTransition) {
+  if (!document.startViewTransition || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     switchDark(nextIsDark, root);
     return
   }
@@ -243,6 +254,7 @@ function changeAside() {
 function clickLogout() {
   logoutLoading.value = true
   logout().then(() => {
+    useEmailStore().clearPrivateSession()
     localStorage.removeItem("token")
     router.replace('/login')
   }).finally(() => {
@@ -323,6 +335,9 @@ function formatName(email) {
     text-align: center;
     color: var(--regular-text-color);
     cursor: pointer;
+    background: transparent;
+    border: 0;
+    font: inherit;
   }
 
   .logout {
@@ -356,16 +371,19 @@ function formatName(email) {
 
 
 .header {
-  text-align: right;
+  min-width: 0;
+  text-align: end;
   font-size: 12px;
   display: grid;
   height: 100%;
-  gap: 10px;
-  grid-template-columns: auto auto 1fr;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  color: var(--ui-ink, var(--el-text-color-primary));
+  background: var(--ui-surface, var(--el-bg-color));
 }
 
 .header.not-send {
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .writer-box {
@@ -373,14 +391,18 @@ function formatName(email) {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: 5px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
 
   .writer {
     width: 34px;
     height: 34px;
     border-radius: 50%;
     color: #ffffff;
-    background: linear-gradient(135deg, #1890ff, #3a80dd);
+    background: var(--ui-primary, var(--el-color-primary));
     transition: all 0.3s ease;
     display: flex;
     align-items: center;
@@ -401,10 +423,36 @@ function formatName(email) {
   min-width: 0;
 }
 
+.menu-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: var(--el-text-color-primary);
+  cursor: pointer;
+}
+
+.menu-toggle:hover,
+.writer-box:hover {
+  background: var(--base-fill);
+}
+
+.menu-toggle :deep(div) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0 !important;
+}
+
 .breadcrumb-item {
   font-weight: bold;
-  font-size: 14px;
-  color: var(--el-text-color-primary);
+  font-size: 17px;
+  color: var(--ui-ink, var(--el-text-color-primary));
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -412,30 +460,47 @@ function formatName(email) {
 
 .toolbar {
   display: flex;
-  justify-content: end;
-  gap: 15px;
+  justify-content: flex-end;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
   @media (max-width: 767px) {
-    gap: 10px;
+    gap: 2px;
   }
 
   .icon-item {
     align-self: center;
-    width: 30px;
-    height: 30px;
-    border-radius: 4px;
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
   }
 
+  :deep(.language-mobile) { display: none; }
+
+  @media (max-width: 767px) {
+    .header-language { display: none; }
+    :deep(.language-mobile) { display: inline-flex; }
+    :deep(.language-mobile .language-picker-trigger) {
+      width: 44px;
+      justify-content: center;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+    :deep(.language-mobile .language-picker-name),
+    :deep(.language-mobile .language-picker-trigger > svg:last-child) { display: none; }
+  }
+
   .icon-item:hover {
-    background: var(--base-fill);
+    background: var(--ui-surface-alt, var(--base-fill));
   }
 
   .notice {
     font-size: 22px;
-    margin-right: 4px;
   }
 
   .dark-icon {
@@ -449,11 +514,15 @@ function formatName(email) {
   .avatar {
     display: flex;
     align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
     cursor: pointer;
 
     .avatar-text {
-      background: var(--el-bg-color);
-      color: var(--el-text-color-primary);
+      background: var(--ui-surface-alt, var(--el-bg-color));
+      color: var(--ui-ink, var(--el-text-color-primary));
       height: 30px;
       width: 30px;
       display: flex;
@@ -473,7 +542,22 @@ function formatName(email) {
 
 }
 
-.el-tooltip__trigger:first-child:focus-visible {
-  outline: unset;
+.header button:focus-visible {
+  outline: 2px solid var(--ui-focus, var(--el-color-primary));
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+.toolbar :deep(.app-install-button.compact) {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+}
+
+@media (max-width: 480px) {
+  .header { gap: 0; }
+  .breadcrumb-item { display: none; }
+  .toolbar { gap: 0; }
+  .toolbar .avatar .setting-icon { display: none; }
 }
 </style>
