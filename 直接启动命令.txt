@@ -1,0 +1,32 @@
+Cloud Mail：直接用命令启动（PowerShell，2026-10-13）
+
+先在 VS Code 打开整个 D:\Code\CloudMail 文件夹。
+本机默认 Node 20 / pnpm 9 与本项目不匹配，下面的 PATH 只影响当前终端，切换到已有 Node 24 / pnpm 11。
+
+终端一：后端，保持运行
+$env:Path = "$env:USERPROFILE\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin;$env:USERPROFILE\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\fallback;$env:Path"
+cd D:\Code\CloudMail\mail-worker
+pnpm.cmd run dev
+
+看到 Ready on http://127.0.0.1:8787 表示后端启动成功。
+本地数据库已经初始化，.dev.vars 已准备好，无须再次运行初始化脚本。
+
+终端二：前端，保持运行
+$env:Path = "$env:USERPROFILE\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin;$env:USERPROFILE\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\fallback;$env:Path"
+cd D:\Code\CloudMail\mail-vue
+pnpm.cmd run dev
+
+浏览器打开 http://127.0.0.1:3001
+账号：admin（右侧域名选择 @haoxi1688.com）
+密码：D:\Code\CloudMail\.local\credentials.json 中的 adminPassword。
+两个终端分别按 Ctrl+C 停止。不要重复启动同一个服务。
+
+已有依赖和编译产物，无须每次安装。若依赖目录被删除，在各自目录执行 pnpm.cmd install --frozen-lockfile 后再 run dev。
+如果需要更新 8787 上的编译版前端，在 mail-vue 执行 pnpm.cmd run build；开发时用 3001 热更新即可。
+
+Git：origin 是自己的仓库 https://github.com/GabraYg/cloud-mail.git；upstream 是原项目 maillab/cloud-mail。
+首次发布分支用 git push -u origin haoxi-fixes，远程创建分支后才可正常“同步”。
+若 Git 提示 Invalid username or token，先在自己的 VS Code 终端重新登录：
+git credential-manager github login --username GabraYg --device --force
+按它显示的 GitHub 验证地址和一次性代码登录，然后执行 git push -u origin haoxi-fixes。
+不要把令牌发到聊天里，不要把密钥文件提交到 Git。
