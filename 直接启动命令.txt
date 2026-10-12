@@ -27,6 +27,7 @@ pnpm.cmd run dev
 Git：origin 是自己的仓库 https://github.com/GabraYg/cloud-mail.git；upstream 是原项目 maillab/cloud-mail。
 首次发布分支用 git push -u origin haoxi-fixes，远程创建分支后才可正常“同步”。
 若 Git 提示 Invalid username or token，先在自己的 VS Code 终端重新登录：
-git credential-manager github login --username GabraYg --device --force
-按它显示的 GitHub 验证地址和一次性代码登录，然后执行 git push -u origin haoxi-fixes。
+git credential-manager github login --username GabraYg --browser --force
+在弹出的浏览器登录 GitHub 并授权，然后执行 git push -u origin haoxi-fixes。
 不要把令牌发到聊天里，不要把密钥文件提交到 Git。
+
