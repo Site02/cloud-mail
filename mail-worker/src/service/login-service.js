@@ -25,6 +25,10 @@ const loginService = {
 	async register(c, params, oauth = false) {
 
 		const { email, password, token, code } = params;
+		const bootstrappingAdmin = c.get('bootstrapAdmin') === true && email === c.env.admin;
+		if (email?.toLowerCase() === c.env.admin?.toLowerCase() && !bootstrappingAdmin) {
+			throw new BizError('Administrator registration is reserved for deployment', 403);
+		}
 
 		let { regKey, register, registerVerify, regVerifyCount, minEmailPrefix, emailPrefixFilter } = await settingService.query(c)
 
@@ -33,7 +37,7 @@ const loginService = {
 			register = settingConst.register.OPEN;
 		}
 
-		if (register === settingConst.register.CLOSE) {
+		if (register === settingConst.register.CLOSE && !bootstrappingAdmin) {
 			throw new BizError(t('regDisabled'));
 		}
 

@@ -1,0 +1,49 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Haoxi Cloud Mail：本地启动与部署</title>
+<style>body{max-width:1000px;margin:35px auto;padding:0 22px;font:16px/1.8 system-ui,'Microsoft YaHei',sans-serif;color:#243247}h1,h2{color:#135f9a}h2{margin-top:36px;border-bottom:1px solid #ddd}pre{padding:18px;background:#eff4f8;white-space:pre-wrap;overflow-wrap:anywhere}code{background:#eff4f8;padding:2px 4px}table{border-collapse:collapse;width:100%;margin:12px 0}td,th{border:1px solid #ddd;padding:9px;text-align:left}aside{background:#fff3d9;padding:14px;border-left:4px solid #d4911b}a{color:#087ac1}</style>
+<h1>Cloud Mail 本地启动与 Cloudflare 部署说明</h1><p>项目位置：<strong>D:\Code\CloudMail</strong>。原项目：<a href="https://github.com/maillab/cloud-mail">maillab/cloud-mail</a>，基于 ec7a2bb17c950576c38d7308128cac7696fea169，本地分支 haoxi-fixes。保留原版界面，在本地修复后再部署。本说明更新于 2026-10-13。</p>
+<aside>本地已验证登录、模拟收信、中文正文和私有附件。尚未创建你的 GitHub Fork，也没有部署到 Cloudflare；公网收信、Resend 发信/回复尚未验证。不是所有上游问题都已修复。</aside>
+<h2>1．用什么软件运行？</h2><p>前后端都用 VS Code 即可，不需要 Visual Studio、Java、.NET 或单独的 MySQL。前端是 Vue 3 + Vite；后端是 JavaScript + Hono，运行在 Cloudflare Workers。Node.js 执行工具，Wrangler 在电脑上模拟 Worker、D1（SQLite）、KV 和 R2。生产数据库和本地数据库互相独立。</p>
+<p>当前电脑启动脚本可以自动使用已有的 Node.js 24 和 pnpm 11 运行时。换电脑时安装 Node.js 24 和 pnpm 11；然后重开终端。不要直接使用电脑原有的 Node.js 20。</p>
+<h2>2．只想先看网页：一条命令启动</h2><ol><li>VS Code → 文件 → 打开文件夹 → 选择 <code>D:\Code\CloudMail</code>。</li><li>菜单“终端 → 新建终端”，使用 PowerShell。</li><li>执行：</li></ol>
+<pre>cd D:\Code\CloudMail
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Start-Local.ps1</pre>
+<p>脚本安装锁定依赖、编译前端、启动本地 Worker、初始化数据库并创建管理员。看到 <code>Local Cloud Mail: http://127.0.0.1:8787</code> 后，浏览器打开 <a href="http://127.0.0.1:8787">http://127.0.0.1:8787</a>。保持终端运行。</p>
+<p>登录账号：<code>admin@haoxi1688.com</code>；登录页带域名下拉框时只填 <code>admin</code>。密码保存在本地 <code>D:\Code\CloudMail\.local\credentials.json</code> 的 <code>adminPassword</code> 中，用 VS Code 打开查看。不要把这个文件提交到 Git、截图或发到群里。本地管理员密码与未来生产密码分别生成。</p>
+<p>下次代码没有变更，可省略安装和前端编译：</p><pre>powershell -NoProfile -ExecutionPolicy Bypass -File .\Start-Local.ps1 -SkipBuild</pre>
+<p>停止：在启动终端按 Ctrl+C。数据保存在 <code>mail-worker\.wrangler\state</code>，下次启动保留。不要删除 <code>.local</code> 或数据库目录；删除凭据会与已创建的账号不匹配。重复初始化不会重置管理员密码。</p>
+<h2>3．开发前端：开启热更新</h2><p>后端终端保持运行，再新开一个 PowerShell 终端：</p><pre>cd D:\Code\CloudMail
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Start-Frontend.ps1</pre>
+<p>浏览器打开 <a href="http://127.0.0.1:3001">http://127.0.0.1:3001</a>。前端请求自动转给 8787 后端。修改 <code>mail-vue\src</code>，保存后热更新；修改 <code>mail-worker\src</code>，Wrangler 自动重载。8787 显示编译版页面，修改前端后需要重新编译；3001 用于日常开发。</p>
+<p>首次打开某个页面时 Vite 可能优化依赖并刷新；若出现动态模块加载错误，等终端优化结束后刷新。两个入口使用不同浏览器存储，各自登录；两者使用同一份本地数据库。</p>
+<h2>4．模拟收信，不需要改域名</h2><p>保持后端运行，在第三个 PowerShell 终端执行：</p><pre>cd D:\Code\CloudMail
+. .\scripts\runtime.ps1
+node scripts\send-local-email.cjs</pre>
+<p>显示 <code>Local email submitted</code> 后刷新管理员收件箱，会出现 Local receipt test。这是模拟邮件，调用真实解析、入库流程，没有通过公网发送。模拟入口只有本地配置开启并持有本地密钥才能用，生产配置不会开启。</p>
+<table><tr><th>本地可以验证</th><th>需要云端再验证</th></tr><tr><td>页面、登录、权限、邮件解析/入库、附件、前端开发</td><td>外部邮箱真实来信、Resend 发往外部邮箱、回复送达、域名认证、生产容量和 CPU 限额</td></tr></table>
+<h2>5．本次修复范围</h2><ul><li>邮件 HTML 过滤：阻止正文中的脚本事件、危险链接和表单，保留正常邮件显示。</li><li>Resend 回调：验证 Svix 签名；外部无匹配邮件和乱序事件不会导致无限异常；数据库失败仍返回重试。</li><li>附件：统一 KV/R2/S3 读取；必须登录并验证附件归属，禁用私有附件共享缓存。</li><li>初始化：独立 bootstrap 密钥，不再把 JWT 密钥放在初始化 URL；先关闭公开注册，再创建保留的管理员账号。</li><li>配置缓存刷新返回相同结构，修复管理员初始化失败；UTF-8 流式解码避免中文跨数据块乱码。</li><li>部署工作流：失败正确报错，测试先于部署，密钥走 GitHub Secrets。</li><li>依赖安全补丁：当前生产依赖 audit 为零已知告警；这不等于完成全面安全审计。</li></ul>
+<p>验证记录：10 个后端回归测试、4 个部署配置测试、浏览器恶意正文测试、前端编译、Worker dry-run、本地真实浏览器登录/收件箱及 R2 附件测试均通过。浏览器测试覆盖 8787 编译版与 3001 开发版。没有运行 GitHub Actions 或真实云端部署。</p>
+<p>参考上游：<a href="https://github.com/maillab/cloud-mail/issues/584">Resend 回调问题 #584</a>、<a href="https://github.com/maillab/cloud-mail/pull/570">R2 读取相关 PR #570</a>。上游 PR 需逐个审查，不能全部直接合并。S3 删除兼容性、第三方 OAuth 附件登录、企业多因素认证等未纳入本次完整验证。当前公司方案先用密码登录并关闭公开注册，附件使用私有 R2。</p>
+<h2>6．本地确认后：Fork、推送与自动部署</h2><ol><li>打开原项目 GitHub 页面 → Fork → 放到你自己的账号，保留 main 分支。Fork 只是复制仓库，不会自动配置你的公司域名。</li><li>取得自己的仓库地址，例如 <code>https://github.com/你的用户名/cloud-mail.git</code>。将下方占位符替换后执行。<strong>不要直接推给 maillab 原仓库。</strong></li></ol>
+<pre>cd D:\Code\CloudMail
+git remote add upstream https://github.com/maillab/cloud-mail.git
+git remote set-url origin https://github.com/你的用户名/cloud-mail.git
+git push -u origin haoxi-fixes</pre>
+<p>在自己的仓库提交 haoxi-fixes → main 的 PR，检查通过再合并。PR 只做检查；合并 main 后触发部署。部署前先完成下一节的 Secrets/Variables；否则工作流会明确报缺少配置。遇到“upstream 已存在”时先 <code>git remote -v</code> 检查，不要覆盖未知远程。</p>
+<h2>7．GitHub Actions 配置</h2><p>自己的仓库 → Settings → Secrets and variables → Actions。Secrets 放密钥；Variables 放普通参数。工作流会创建/复用名为 haoxi-cloud-mail 的 D1 和 KV。正式资源与本地模拟资源无关。</p>
+<table><tr><th>Secrets 名称</th><th>内容</th></tr><tr><td>CLOUDFLARE_ACCOUNT_ID</td><td>Cloudflare 账号 ID，账号主页/Worker 概览可复制。</td></tr><tr><td>CLOUDFLARE_API_TOKEN</td><td>专用 API Token，按下文授权，不用 Global API Key。</td></tr><tr><td>JWT_SECRET</td><td>生产签名密钥，至少 32 字符。</td></tr><tr><td>BOOTSTRAP_SECRET</td><td>独立初始化密钥，至少 32 字符，与 JWT_SECRET 不同。</td></tr><tr><td>ADMIN_PASSWORD</td><td>20–30 字符管理员初始密码。</td></tr><tr><td>RESEND_WEBHOOK_SECRET</td><td>稍后从 Resend Webhooks 复制 whsec_ 开头的签名密钥。首次可不填；未配置时回调被拒绝。</td></tr></table>
+<p>生成三项生产随机凭据：</p><pre>cd D:\Code\CloudMail
+. .\scripts\runtime.ps1
+node scripts\generate-secrets.cjs</pre>
+<p>打开 <code>.local\production-secrets.json</code>，逐项复制到 GitHub Secrets，保存好管理员密码。已经生成时脚本拒绝覆盖；线上部署后不要随意重置这些值。</p>
+<table><tr><th>Variables 名称</th><th>填写值</th></tr><tr><td>NAME</td><td>haoxi-cloud-mail</td></tr><tr><td>DOMAIN</td><td>["haoxi1688.com"]</td></tr><tr><td>ADMIN</td><td>admin@haoxi1688.com</td></tr><tr><td>CUSTOM_DOMAIN</td><td>mail.haoxi1688.com</td></tr><tr><td>R2_BUCKET_NAME</td><td>推荐手动创建私有桶 haoxi-cloud-mail-files，再填写此桶名；不填则使用 KV 存储，附件容量更受限。</td></tr></table>
+<p>若需复用已存在的 D1/KV，额外设置 <code>D1_DATABASE_ID</code>、<code>KV_NAMESPACE_ID</code>，确认是专供邮箱使用的资源。数据库和对象存储不要与其他应用混用。</p>
+<p>Cloudflare → My Profile → API Tokens → Create Token → Custom Token。授权指定账号的 Workers Scripts/Edit、Workers KV Storage/Edit、D1/Edit、Account Settings/Read；指定 haoxi1688.com 的 Zone/Read、Workers Routes/Edit、DNS/Edit。使用 R2 时按控制台需要加入该账号 Workers R2 Storage/Edit。资源范围限制到自己的账号和此域名；不需要 Workers AI 权限。权限命名以<a href="https://developers.cloudflare.com/fundamentals/api/reference/permissions/">官方权限列表</a>和控制台为准。</p>
+<p>R2 桶保持私有，不启用 r2.dev 公开访问或公开自定义域名。R2 可能需要开通账单和支付方式；本脚本不会自动开通。配置完成后 Actions → Check and deploy Haoxi Cloud Mail → Run workflow（main）。检查成功，再确认 deploy 成功、日志显示 Deployment and database bootstrap completed。若失败，修复后重跑，不要删除 D1/KV/R2。</p>
+<h2>8．配置 haoxi1688.com 收信</h2><ol><li>先确认 haoxi1688.com 没有现用企业邮箱；若已有 MX，必须先规划迁移。你的 haoxinet.email 是另外一个域名，继续保留它的腾讯企业邮箱配置。</li><li>Cloudflare → Email / Email Routing（新版可能在 Email Service 下）→ 选择 haoxi1688.com → 启用/接入收信，按页面添加邮件专用 MX/TXT。</li><li>Routing Rules → Create rule → 收件人前缀 admin → 动作 Send to a Worker → 选择 haoxi-cloud-mail → 保存。</li><li>浏览器打开 <code>https://mail.haoxi1688.com</code>，用生产管理员密码登录。发送一封外部邮箱来信到 admin@haoxi1688.com，确认收件箱。</li><li>员工先在网页“用户列表”创建账号；创建 sales@haoxi1688.com 后，再加 sales → 同一 Worker 的收信规则。也可以配置 catch-all，但要先确认未知收件人的处理策略。</li></ol>
+<p>只修改邮件 MX/TXT 和新增 mail 的 Worker 自定义域名，不修改 haoxi1688.com、ops、pm、time、erp、jp-cf 的现有 A/CNAME，不切换全域 SSL 模式。如果 mail 子域已存在其他网站，要先解决冲突。收信 MX 指向 Cloudflare，<strong>不要为了 Resend Receiving 替换根域 MX</strong>。参考<a href="https://developers.cloudflare.com/email-service/get-started/route-emails/">官方收信路由文档</a>。</p>
+<h2>9．配置 Resend 发信、回复</h2><ol><li>注册 Resend → Domains → Add Domain → haoxi1688.com。</li><li>把 Resend 页面显示的 DKIM TXT、发送验证/退信子域记录添加到 Cloudflare。值从你自己的页面复制，不使用示例值。邮件相关记录使用 DNS only。同一个主机名只能有一条 SPF；已有 SPF 时合并，不新增第二条。</li><li>等待 Resend 显示 Verified。创建仅 Sending Access、限制 haoxi1688.com 的 API Key。</li><li>网页登录管理员 → 系统设置 → 发信配置/Resend Tokens → 选择 haoxi1688.com，填写该域 API Key，保存；开启发信。API Key 只在管理页面填，不写入前端代码。</li><li>先从 admin@haoxi1688.com 发给自己的 QQ/Gmail，确认收到且 From 域正确；外部邮箱回复后检查 Cloud Mail 收到；再在 Cloud Mail 点击回复，确认对方收到。</li><li>若要跟踪投递状态，在 Resend → Webhooks 创建 endpoint：<code>https://mail.haoxi1688.com/api/webhooks</code>，事件选择 email.delivered / email.delivery_delayed / email.bounced / email.complained / email.failed。复制签名密钥到 GitHub Secret RESEND_WEBHOOK_SECRET，重跑部署后再启用 Webhook。缺少或错误签名时服务会拒绝回调。</li></ol>
+<p>发信/回复走 Resend，收信走 Cloudflare，网页处理已发送、收件箱和回复。参考<a href="https://resend.com/docs/dashboard/domains/introduction">Resend 域名认证</a>。员工角色只给使用本域、收发和所需附件权限；设置每天发信额度，避免开放给公众注册。管理员密码不要共享给同事。</p>
+<h2>10．费用和正式公司使用边界</h2><p>项目 MIT 开源，无软件授权费。域名续费照常；此方案不需要再买邮箱 VPS。Cloudflare 与 Resend 的免费套餐有额度，超出后需升级或限制使用。</p>
+<ul><li><a href="https://resend.com/pricing">Resend</a> 免费发信 3,000 封/月、100 封/天，额度由所有员工共用；Pro 页面当前起价 20 美元/月、50,000 封/月。</li><li><a href="https://developers.cloudflare.com/workers/platform/pricing/">Workers</a> 免费请求 100,000/天，CPU 限制可能影响复杂邮件和大附件；付费套餐起价 5 美元/月，可能另有超额费。</li><li><a href="https://developers.cloudflare.com/d1/platform/limits/">D1</a> 免费单数据库 500 MB，总数据库容量 5 GB；KV 免费写入额度和容量也有限。</li><li><a href="https://developers.cloudflare.com/r2/pricing/">R2 Standard</a> 免费存储 10 GB，并有读写操作免费额度；超出按量计费，开通可能需要支付方式。</li><li><a href="https://developers.cloudflare.com/email-service/platform/limits/">Cloudflare 收信</a> 单封邮件总大小上限 25 MiB，包含附件编码开销；实际项目还受到 CPU、存储和数据库限制。</li></ul>
+<p>公司上线前仍要验证员工权限、备份恢复、垃圾邮件处理、连续收发和配额；现有腾讯企业邮箱先保留。Cloud Mail 不是完整的 SMTP/IMAP 邮件服务器，不能直接承诺像腾讯邮箱一样接入所有 Outlook/手机原生邮件客户端。本次测试通过不代表所有上游 issue 已解决。</p>
+<h2>11．常见问题</h2><ul><li>端口 8787 已占用：如果本地 Cloud Mail 已运行，直接打开网页；需要重启时关闭旧启动终端，再启动一份。</li><li>执行策略拦截：使用上面的 powershell -ExecutionPolicy Bypass 命令，只对这次进程生效。</li><li>pnpm 下载超时：重新执行启动脚本。必要时在两个子目录使用 <code>pnpm install --frozen-lockfile --registry=https://registry.npmmirror.com</code>，安装成功后重启。</li><li>初始化报错：查看真实错误，修复后再运行。重复迁移可能出现 duplicate column / 已有字段警告；只有最后明确成功且登录正常才算启动完成。</li><li>前端没有后端：仅启动 3001 无法登录，必须同时保持 8787 Worker 运行。</li><li>想看模拟邮件：运行 send-local-email.cjs；本机网页里的域名账号不会自动获得公网邮件路由。</li></ul></html>

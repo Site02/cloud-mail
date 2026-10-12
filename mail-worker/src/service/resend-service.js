@@ -1,10 +1,11 @@
 import emailService from './email-service';
 import { emailConst } from '../const/entity-const';
-import BizError from '../error/biz-error';
 
 const resendService = {
 
 	async webhooks(c, body) {
+		const events = ['email.delivered', 'email.complained', 'email.bounced', 'email.delivery_delayed', 'email.failed'];
+		if (!events.includes(body?.type) || !body?.data?.email_id) return 'ignored';
 
 		const params = {
 			resendEmailId: body.data.email_id,
@@ -35,14 +36,20 @@ const resendService = {
 
 		if (body.type === 'email.failed') {
 			params.status = emailConst.status.FAILED
-			params.message = body.data.failed.reason
+			params.message = JSON.stringify({ message: body.data.failed?.reason || 'Delivery failed' })
 		}
 
 		const emailRow = await emailService.updateEmailStatus(c, params)
 
 		if (!emailRow) {
-			throw new BizError('更新邮件状态记录失败');
+			const existing = await c.env.db.prepare('SELECT email_id FROM email WHERE resend_email_id = ? LIMIT 1').bind(params.resendEmailId).first();
+			if (existing) return 'ignored'; // Out-of-order events cannot regress a final status.
+			// A callback can arrive before send() has inserted its D1 record.
+			// Retry only fresh events; unrelated older events must not disable the webhook.
+			const age = Date.now() - Date.parse(body.created_at);
+			return Number.isFinite(age) && age >= -10000 && age < 90000 ? 'retry' : 'ignored';
 		}
+		return 'updated';
 
 	}
 }

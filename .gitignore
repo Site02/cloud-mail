@@ -12,6 +12,7 @@ dist-ssr
 dist
 
 .vscode/*
+**/.vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
@@ -26,3 +27,12 @@ mail-vue/dist
 .wrangler
 .venv
 git-tools.js
+.dev.vars*
+.local/
+wrangler.generated.toml
+reports/
+*.pem
+*.key
+*.crt
+__pycache__/
+*.pyc

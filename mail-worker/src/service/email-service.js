@@ -872,10 +872,18 @@ const emailService = {
 
 	updateEmailStatus(c, params) {
 		const { status, resendEmailId, message } = params;
+		const { SENT, DELIVERED, BOUNCED, COMPLAINED, DELAYED, FAILED } = emailConst.status;
+		const allowed = {
+			[DELAYED]: [SENT, DELAYED],
+			[DELIVERED]: [SENT, DELAYED, DELIVERED],
+			[FAILED]: [SENT, DELAYED, FAILED],
+			[BOUNCED]: [SENT, DELIVERED, DELAYED, FAILED, BOUNCED],
+			[COMPLAINED]: [SENT, DELIVERED, DELAYED, FAILED, BOUNCED, COMPLAINED],
+		};
 		return orm(c).update(email).set({
 			status: status,
 			message: message
-		}).where(eq(email.resendEmailId, resendEmailId)).returning().get();
+		}).where(and(eq(email.resendEmailId, resendEmailId), inArray(email.status, allowed[status] || [SENT]))).returning().get();
 	},
 
 	async selectUserEmailCountList(c, userIds, type, del = isDel.NORMAL) {

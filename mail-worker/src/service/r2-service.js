@@ -72,6 +72,29 @@ const r2Service = {
 			await s3Service.deleteObj(c, key);
 		}
 
+	},
+
+	async toObjResp(c, key) {
+		let obj;
+		try { obj = await this.getObj(c, key); }
+		catch (error) {
+			if (error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) obj = null;
+			else throw error;
+		}
+		if (!obj) return new Response('Not found', { status: 404 });
+		const headers = obj instanceof Response ? new Headers(obj.headers) : new Headers();
+		if (!(obj instanceof Response)) obj.writeHttpMetadata?.(headers);
+		headers.set('X-Content-Type-Options', 'nosniff');
+		if (key.startsWith('attachments/')) {
+			headers.set('Cache-Control', 'private, no-store');
+			headers.set('Content-Security-Policy', "sandbox; default-src 'none'; style-src 'unsafe-inline'");
+			const type = headers.get('Content-Type') || 'application/octet-stream';
+			if (!/^image\/(png|jpeg|gif|webp|bmp)(;|$)/i.test(type)) {
+				const disposition = headers.get('Content-Disposition');
+				headers.set('Content-Disposition', disposition?.replace(/^inline/i, 'attachment') || 'attachment');
+			}
+		}
+		return new Response(obj.body, { status: obj instanceof Response ? obj.status : 200, headers });
 	}
 
 };

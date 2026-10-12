@@ -9,6 +9,7 @@ import { parseHTML } from 'linkedom';
 import { v4 as uuidv4 } from 'uuid';
 import domainUtils from '../utils/domain-uitls';
 import settingService from "./setting-service";
+import userContext from '../security/user-context';
 
 const attService = {
 
@@ -82,19 +83,20 @@ const attService = {
 			}
 
 			//邮件正文站内图片转cid附件
-			if (src && (src.startsWith(domainUtils.toOssDomain(r2Domain)) || src.startsWith('attachments/'))) {
+			const ossDomain = domainUtils.toOssDomain(r2Domain);
+			if (src && ((ossDomain && src.startsWith(ossDomain + '/')) || src.startsWith('attachments/') || src.startsWith('/attachments/'))) {
 
 				const cid = uuidv4().replace(/-/g, '')
 				img.setAttribute('src', 'cid:' + cid);
 
 				const attData = {};
 
-				if (src.startsWith(domainUtils.toOssDomain(r2Domain))) {
+				if (ossDomain && src.startsWith(ossDomain + '/')) {
 					attData.key = src.replace(domainUtils.toOssDomain(r2Domain) + '/','');
 				}
 
-				if (src.startsWith('attachments/')) {
-					attData.key = src;
+				if (src.startsWith('attachments/') || src.startsWith('/attachments/')) {
+					attData.key = src.replace(/^\//, '');
 				}
 
 				attData.contentId = cid;
@@ -115,7 +117,10 @@ const attService = {
 
 		//查询已有内嵌url图片信息
 		const keys = [...new Set(imageDataList.filter(item => !item.content).map(item => item.key))];
-		const dbImageList  = await this.selectOneByKeys(c, keys);
+		const currentUser = userContext.getUser(c);
+		const dbImageList = keys.length ? await orm(c).select().from(att).where(
+			and(inArray(att.key, keys), currentUser.email === c.env.admin ? undefined : eq(att.userId, currentUser.userId))
+		).orderBy(desc(att.attId)).groupBy(att.key).all() : [];
 
 		//设置给当前附件
 		await Promise.all(imageDataList.map(async image => {

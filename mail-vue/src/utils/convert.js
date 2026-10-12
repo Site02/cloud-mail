@@ -2,19 +2,22 @@ import {useSettingStore} from "@/store/setting.js";
 export function cvtR2Url(key) {
 
     if (!key) {
-        return + 'https://' + ''
+        return ''
     }
 
     if (key.startsWith('https://')) {
         return key
     }
 
+    // Keep private attachments on this origin so the HttpOnly session cookie applies.
+    if (key.startsWith('attachments/') || key.startsWith('/attachments/')) return '/' + key.replace(/^\//, '');
+
     const { settings } = useSettingStore();
 
     let domain = settings.r2Domain
 
     if (!domain) {
-        return key;
+        return '/' + key.replace(/^\//, '');
     }
 
     if (!domain.startsWith('http')) {

@@ -7,11 +7,13 @@ import userService from '../service/user-service';
 import permService from '../service/perm-service';
 import { t } from '../i18n/i18n'
 import app from '../hono/hono';
+import { getCookie } from 'hono/cookie';
+import { attachmentCookieOptions } from '../utils/attachment-cookie';
 
 const exclude = [
 	'/login',
 	'/register',
-	'/oss',
+	'/oss/static/',
 	'/setting/websiteConfig',
 	'/webhooks',
 	'/init',
@@ -112,7 +114,8 @@ app.use('*', async (c, next) => {
 	}
 
 
-	const jwt = c.req.header(constant.TOKEN_HEADER);
+	const jwt = c.req.header(constant.TOKEN_HEADER) ||
+		(path.startsWith('/oss/attachments/') ? getCookie(c, attachmentCookieOptions(c).name) : undefined);
 
 	const result = await jwtUtils.verifyToken(c, jwt);
 

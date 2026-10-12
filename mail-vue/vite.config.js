@@ -10,9 +10,16 @@ export default defineConfig(({mode}) => {
     const env = loadEnv(mode, process.cwd(), 'VITE')
     return {
         server: {
-            host: true,
+            host: '127.0.0.1',
             port: 3001,
+            strictPort: true,
+            warmup: { clientFiles: ['./src/views/**/*.vue', './src/layout/**/*.vue'] },
             hmr: true,
+            proxy: {
+                '/api': 'http://127.0.0.1:8787',
+                '/attachments': 'http://127.0.0.1:8787',
+                '/static': 'http://127.0.0.1:8787',
+            },
         },
         base: env.VITE_STATIC_URL || '/',
         plugins: [vue(),

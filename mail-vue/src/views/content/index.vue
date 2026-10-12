@@ -183,7 +183,7 @@ function toMessage(message) {
 function formatImage(content) {
   content = content || '';
   const domain = settingStore.settings.r2Domain;
-  return  content.replace(/{{domain}}/g, toOssDomain(domain) + '/');
+  return content.replace(/{{domain}}attachments\//g, '/attachments/').replace(/{{domain}}/g, toOssDomain(domain) + '/');
 }
 
 function showImage(key) {

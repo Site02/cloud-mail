@@ -16,8 +16,10 @@ const settingService = {
 	async refresh(c) {
 		const settingRow = await orm(c).select().from(setting).get();
 		settingRow.resendTokens = JSON.parse(settingRow.resendTokens);
-		c.set('setting', settingRow);
 		await c.env.kv.put(KvConst.SETTING, JSON.stringify(settingRow));
+		// A refresh must return the same normalized shape as a cache read.
+		c.set('setting', undefined);
+		await this.query(c);
 	},
 
 	async query(c) {
@@ -60,7 +62,9 @@ const settingService = {
 
 		setting.projectLink = projectLink;
 
-		setting.emailPrefixFilter = setting.emailPrefixFilter.split(",").filter(Boolean);
+		setting.emailPrefixFilter = Array.isArray(setting.emailPrefixFilter)
+			? setting.emailPrefixFilter
+			: String(setting.emailPrefixFilter || '').split(',').filter(Boolean);
 
 		c.set?.('setting', setting);
 		return setting;
