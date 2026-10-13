@@ -11,12 +11,42 @@ import verifyRecordService from './verify-record-service';
 import userContext from '../security/user-context';
 import domainUtils from '../utils/domain-uitls';
 
+function normalizeRelayUrl(value) {
+	const normalized = String(value || '').trim().replace(/\/+$/, '');
+	if (!normalized) return '';
+
+	let relayUrl;
+	try {
+		relayUrl = new URL(normalized);
+	} catch {
+		throw new BizError('Invalid self-hosted relay URL');
+	}
+	if (relayUrl.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(relayUrl.hostname)) {
+		throw new BizError('Self-hosted relay URL must use HTTPS');
+	}
+	if (relayUrl.username || relayUrl.password) {
+		throw new BizError('Self-hosted relay URL must not contain credentials');
+	}
+	if (relayUrl.search || relayUrl.hash) {
+		throw new BizError('Self-hosted relay URL must not contain a query or fragment');
+	}
+	return normalized;
+}
+
 const settingService = {
+	applyRuntimeMailDefaults(c, settingRow) {
+		const runtimeSetting = { ...settingRow };
+		const longosRelayUrl = normalizeRelayUrl(c.env.longos_relay_url);
+		if (!runtimeSetting.relayUrl && longosRelayUrl) {
+			runtimeSetting.relayUrl = longosRelayUrl;
+		}
+		return runtimeSetting;
+	},
 
 	async refresh(c) {
 		const settingRow = await orm(c).select().from(setting).get();
 		settingRow.resendTokens = JSON.parse(settingRow.resendTokens);
-		c.set('setting', settingRow);
+		c.set('setting', this.applyRuntimeMailDefaults(c, settingRow));
 		await c.env.kv.put(KvConst.SETTING, JSON.stringify(settingRow));
 	},
 
@@ -26,11 +56,13 @@ const settingService = {
 			return c.get('setting')
 		}
 
-		const setting = await c.env.kv.get(KvConst.SETTING, { type: 'json' });
+		const storedSetting = await c.env.kv.get(KvConst.SETTING, { type: 'json' });
 
-		if (!setting) {
+		if (!storedSetting) {
 			throw new BizError('数据库未初始化 Database not initialized.');
 		}
+
+		const setting = this.applyRuntimeMailDefaults(c, storedSetting);
 
 		let domainList = c.env.domain;
 
@@ -89,6 +121,7 @@ const settingService = {
 		settingRow.tgBotToken = settingRow.tgBotToken ? `${settingRow.tgBotToken.slice(0, 20)}******` : null;
 		settingRow.hasR2 = !!c.env.r2
 		settingRow.hasCfEmail = !!c.env.email
+		settingRow.hasRelaySecret = !!c.env.RELAY_SHARED_SECRET
 
 		let regVerifyOpen = false
 		let addVerifyOpen = false
@@ -112,6 +145,13 @@ const settingService = {
 
 	async set(c, params) {
 		const settingData = await this.query(c);
+		const allowedMailEngines = ['auto', 'cloudflare', 'resend', 'self_hosted'];
+		if (params.mailEngine !== undefined && !allowedMailEngines.includes(params.mailEngine)) {
+			throw new BizError('Invalid mail engine');
+		}
+		if (params.relayUrl !== undefined) {
+			params.relayUrl = normalizeRelayUrl(params.relayUrl);
+		}
 		let resendTokens = { ...settingData.resendTokens, ...params.resendTokens };
 		Object.keys(resendTokens).forEach(domain => {
 			if (!resendTokens[domain]) delete resendTokens[domain];
@@ -232,4 +272,5 @@ const settingService = {
 
 };
 
+export { normalizeRelayUrl };
 export default settingService;

@@ -32,8 +32,30 @@ const dbInit = {
 		await this.v3_1DB(c);
 		await this.v3_2DB(c);
 		await this.v3_3DB(c);
+		await this.v3_4DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	async v3_4DB(c) {
+		const statements = [
+			`ALTER TABLE setting ADD COLUMN mail_engine TEXT NOT NULL DEFAULT 'auto';`,
+			`ALTER TABLE setting ADD COLUMN relay_url TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE email ADD COLUMN provider TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE email ADD COLUMN provider_message_id TEXT;`,
+		];
+
+		for (const statement of statements) {
+			try {
+				await c.env.db.prepare(statement).run();
+			} catch (e) {
+				if (/duplicate column name/i.test(String(e.message || ''))) {
+					console.info(`字段已存在，跳过：${e.message}`);
+					continue;
+				}
+				throw e;
+			}
+		}
 	},
 
 	async v3_3DB(c) {
