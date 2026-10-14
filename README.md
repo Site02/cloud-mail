@@ -101,11 +101,11 @@ cloud-mail
 ├── mail-worker				    # worker后端项目
 │   ├── src                  
 │   │   ├── api	 			    # api接口层			
-│   │   ├── const  			    # 项目常量
+
 │   │   ├── dao                 # 数据访问层
-│   │   ├── email			    # 邮件处理接收
+
 │   │   ├── entity			    # 数据库实体
-│   │   ├── error			    # 自定义异常
+
 │   │   ├── hono			    # web框架配置、拦截器、全局异常等
 │   │   ├── i18n			    # 语言国际化
 │   │   ├── init			    # 数据库缓存初始化
@@ -152,7 +152,7 @@ cloud-mail
 
 ## 交流
 
-[Telegram](https://t.me/cloud_mail_tg)
-
+[Telegram]<align"center"https://t.me/cloud_mail_tg)
+1
 
 
