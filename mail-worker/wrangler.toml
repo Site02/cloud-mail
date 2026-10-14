@@ -1,38 +1,38 @@
-name = "cloud-mail"
-main = "src/index.js"
-compatibility_date = "2025-06-04"
-keep_vars = true
+名称 = "cloud-mail" = "cloud-mail"
+main = "src/index.js" = "src/index.js"
+兼容日期 = "2025-06-04" = "2025-06-04"
+keep_vars = true = true
 
-[observability]
-enabled = true
+[可观测性]
+已启用 = true = true
 
 [[d1_databases]]
-binding = "db"
-database_name = "cloud-mail-db"
-database_id = "7e6c5ae0-a7f2-438a-b7bd-76f27f79ec16"
+binding = "db" = "db"
+数据库名称 = "cloud-mail-db" = "cloud-mail-db"
+database_id = "7e6c5ae0-a7f2-438a-b7bd-76f27f79ec16" = "7e6c5ae0-a7f2-438a-b7bd-76f27f79ec16"
 
 [[kv_namespaces]]
-binding = "kv"
-id = "eccbd3af3e79418382c4c224556acdfa"
+binding = "kv" = "kv"
+id = "eccbd3af3e79418382c4c224556acdfa" = "eccbd3af3e79418382c4c224556acdfa"
 
 #[[r2_buckets]]
 #binding = "r2"
 #bucket_name = ""
 
-#[[send_email]]
+#[[发送邮件]]
 #name = "email"
 
 [ai]
-binding = "ai"
+binding = "ai" = "ai"
 
-[assets]
-binding = "assets"
-directory = "./dist"
-not_found_handling = "single-page-application"
-run_worker_first = true
+[资源]
+binding = "assets" = "assets"
+目录 = "./dist" = "./dist"
+not_found_handling = "单页应用" = "single-page-application"
+run_worker_first = true = true
 
-[triggers]
-crons = ["0 * * * *"]
+[触发器]
+crons = ["0 * * * *"] = ["0 * * * *"]
 
 [vars]
 #ai_model = ""
@@ -40,7 +40,7 @@ crons = ["0 * * * *"]
 #orm_log = false
 domain = []
 admin = ""
-jwt_secret = "9sdfJ72Hsdf93jsL2kdf8Ghsd72jhs"
+jwt_secret = "A8k2F9sP5dR7mT1qN4zW6cB0vE3jG8hK"
 
 [build]
 command = "pnpm --prefix ../mail-vue install && pnpm --prefix ../mail-vue run build"
