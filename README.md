@@ -94,18 +94,18 @@
 
 - **文件存储**：[Cloudflare R2](https://developers.cloudflare.com/r2/)
 
-## 目录结构
+ 目录结构
 
 ```
-cloud-mail
+
 ├── mail-worker				    # worker后端项目
 │   ├── src                  
 │   │   ├── api	 			    # api接口层			
-│   │   ├── const  			    # 项目常量
+
 │   │   ├── dao                 # 数据访问层
-│   │   ├── email			    # 邮件处理接收
+
 │   │   ├── entity			    # 数据库实体
-│   │   ├── error			    # 自定义异常
+
 │   │   ├── hono			    # web框架配置、拦截器、全局异常等
 │   │   ├── i18n			    # 语言国际化
 │   │   ├── init			    # 数据库缓存初始化
@@ -117,10 +117,10 @@ cloud-mail
 │   │   └── index.js			# 入口文件
 │   ├── pageckge.json			# 项目依赖
 │   └── wrangler.toml			# 项目配置
-│
-├── mail-vue				    # vue前端项目
-│   ├── src
-│   │   ├── axios 			    # axios配置
+
+
+
+
 │   │   ├── components			# 自定义组件
 │   │   ├── echarts			    # echarts组件导入
 │   │   ├── i18n			    # 语言国际化
@@ -135,7 +135,7 @@ cloud-mail
 │   │   ├── app.vue			    # 入口组件
 │   │   ├── main.js			    # 入口js
 │   │   └── style.css			# 全局css
-│   ├── package.json			# 项目依赖
+
 └── └── env.release				# 项目配置
 ```
 
@@ -152,7 +152,7 @@ cloud-mail
 
 ## 交流
 
-[Telegram](https://t.me/cloud_mail_tg)
+[Telegram]<align"center"https://t.me/cloud_mail_tg)
 
 
 
