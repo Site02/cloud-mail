@@ -31,6 +31,14 @@
 
 ## Description
 With only one domain, you can create multiple different email addresses, similar to major email platforms. This project can be deployed on Cloudflare Workers to reduce server costs and build your own email service.
+## Interface languages
+
+Choose 简体中文 (`zh`), 繁體中文 (`zh-TW`), or English (`en`) under **Settings → Language**. On the first visit, browser locales `zh-TW`, `zh-HK`, `zh-MO`, and `zh-Hant` select Traditional Chinese automatically. Saved language preferences are preserved.
+
+Traditional Chinese covers the application, Element Plus components, dates, the TinyMCE editor, and API errors and permission labels. Translation dictionaries are in `mail-vue/src/i18n/zh-TW.js` and `mail-worker/src/i18n/zh-TW.js`. API clients can send `Accept-Language: zh-TW` (or `zh-Hant`).
+
+After installing dependencies in both projects, run `npm run test:i18n` from `mail-vue` to check dictionary keys, interpolation parameters, and locale switching. Run `npm run build` to build the frontend.
+
 ## Project Showcase
 
 - [Live Demo](https://skymail.ink)<br>
