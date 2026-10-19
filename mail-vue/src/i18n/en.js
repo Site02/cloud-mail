@@ -1,4 +1,12 @@
 const en = {
+    loggingIn: "Signing in...",
+    registerEmail: "Register email",
+    bindEmail: "Bind",
+    bindEmailRequired: "Please register and bind an email address",
+    justNow: "Just now",
+    minutesAgo: "{count} min ago",
+    oneHourAgo: "1 hour ago",
+
     inbox: 'Inbox',
     drafts: 'Drafts',
     sent: 'Sent',
