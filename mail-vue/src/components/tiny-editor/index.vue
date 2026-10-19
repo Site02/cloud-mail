@@ -9,6 +9,7 @@
 import {ref, onMounted, onBeforeUnmount, watch, nextTick, shallowRef, defineEmits, computed} from 'vue';
 import loading from "@/components/loading/index.vue";
 import {useI18n} from 'vue-i18n'
+import {editorLanguages} from '@/i18n/locale.js'
 import {useUiStore} from '@/store/ui.js'
 import {useSettingStore} from '@/store/setting.js'
 
@@ -58,13 +59,7 @@ watch(() => [uiStore.dark, settingStore.lang], () => {
   initEditor();
 });
 
-const language = computed(() => {
-  if (locale.value === 'zh') {
-    return 'zh_CN'
-  }
-
-  return 'en'
-})
+const language = computed(() => editorLanguages[locale.value] || 'en')
 
 function clearEditor() {
   if (editor.value) {
