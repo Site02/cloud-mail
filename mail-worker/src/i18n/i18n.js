@@ -1,30 +1,11 @@
-import i18next from 'i18next';
-import zh from './zh.js'
-import en from './en.js'
-import app from '../hono/hono';
+import i18next, {t} from './resources.js';
+import {resolveLanguage} from './language.js';
+import app from '../hono/hono.js';
 
 app.use('*', async (c, next) => {
-	const lang = c.req.header('accept-language')?.split('-')[0]
-	i18next.init({
-		lng: lang,
-	});
+	i18next.changeLanguage(resolveLanguage(c.req.header('accept-language')));
 	return await next()
 })
 
-const resources = {
-	en: {
-		translation: en
-	},
-	zh: {
-		translation: zh,
-	},
-};
-
-i18next.init({
-	fallbackLng: 'zh',
-	resources,
-});
-
-export const t = (key, values) => i18next.t(key, values)
-
+export {t};
 export default i18next;

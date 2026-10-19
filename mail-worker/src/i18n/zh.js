@@ -1,4 +1,11 @@
 const zh = {
+    kvNotBound: "KV数据库未绑定<br/>KV database not bound",
+    d1NotBound: "D1数据库未绑定<br/>D1 database not bound",
+    databaseUpdateRequired: "请按照文档更新数据库<br/>Please update the database as documented",
+    databaseNotInitialized: "数据库未初始化 Database not initialized.",
+    oauthEmailAlreadyBound: "用户已绑定有邮箱",
+    emailStatusUpdateFailed: "更新邮件状态记录失败",
+
 	IncorrectPwd: '密码输入错误',
 	addAccountDisabled: '添加邮箱功能已关闭',
 	regDisabled: '注册功能已关闭',
