@@ -1,16 +1,19 @@
 import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
+import 'dayjs/locale/zh-tw'
+import i18n from '@/i18n/index.js'
+import {dayjsLocales} from '@/i18n/locale.js'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
 import {useSettingStore} from "@/store/setting.js";
 const settingStore = useSettingStore();
 dayjs.extend(utc)
 dayjs.extend(timezone)
-dayjs.locale(settingStore.lang === 'en' ? 'en' : 'zh-cn')
+dayjs.locale(dayjsLocales[settingStore.lang] || 'en')
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 export function fromNow(date) {
-    const d = dayjs.utc(date).tz(timeZone);
+    const d = dayjs.utc(date).tz(timeZone).locale(dayjsLocales[settingStore.lang] || 'en');
     const now = dayjs();
     const diffSeconds = now.diff(d, 'second');
     const diffMinutes = now.diff(d, 'minute');
@@ -37,9 +40,9 @@ export function fromNow(date) {
     } else {
 
         if (isToday) {
-            if (diffSeconds < 60) return `几秒前`;
-            if (diffMinutes < 60) return `${diffMinutes}分钟前`;
-            if (diffHours >= 1 && diffHours < 2) return '1小时前';
+            if (diffSeconds < 60) return i18n.global.t('justNow');
+            if (diffMinutes < 60) return i18n.global.t('minutesAgo', {count: diffMinutes});
+            if (diffHours >= 1 && diffHours < 2) return i18n.global.t('oneHourAgo');
             return d.format('HH:mm');
         }
         else if (now.subtract(1, 'day').isSame(d, 'day')) {
@@ -66,7 +69,7 @@ export function updateNow(date) {
 }
 
 export function formatDetailDate(time) {
-    const d = dayjs.utc(time).tz(timeZone);
+    const d = dayjs.utc(time).tz(timeZone).locale(dayjsLocales[settingStore.lang] || 'en');
     const now = dayjs();
 
     const isSameYear = now.year() === d.year();
@@ -81,7 +84,7 @@ export function formatDetailDate(time) {
 }
 
 export function tzDayjs(time) {
-    return dayjs.utc(time).tz(timeZone)
+    return dayjs.utc(time).tz(timeZone).locale(dayjsLocales[settingStore.lang] || 'en')
 }
 
 export function toUtc(time) {
@@ -89,5 +92,5 @@ export function toUtc(time) {
 }
 
 export function setExtend(lang) {
-    dayjs.locale(lang)
+    dayjs.locale(dayjsLocales[lang] || lang)
 }
