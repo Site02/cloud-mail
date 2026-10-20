@@ -1,5 +1,5 @@
 <template>
-  <el-config-provider :locale="settingStore.lang === 'zh' ? zhCn : null">
+  <el-config-provider :locale="settingStore.lang === 'en' ? null : zhCn">
     <router-view />
   </el-config-provider>
 </template>

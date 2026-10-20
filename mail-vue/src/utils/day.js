@@ -1,12 +1,13 @@
 import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
+import 'dayjs/locale/zh-tw'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
 import {useSettingStore} from "@/store/setting.js";
 const settingStore = useSettingStore();
 dayjs.extend(utc)
 dayjs.extend(timezone)
-dayjs.locale(settingStore.lang === 'en' ? 'en' : 'zh-cn')
+dayjs.locale(settingStore.lang === 'en' ? 'en' : settingStore.lang === 'zh-TW' ? 'zh-tw' : 'zh-cn')
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 export function fromNow(date) {
