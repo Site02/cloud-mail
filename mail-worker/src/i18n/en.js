@@ -1,4 +1,11 @@
 const en = {
+    kvNotBound: "KV database not bound",
+    d1NotBound: "D1 database not bound",
+    databaseUpdateRequired: "Please update the database as documented",
+    databaseNotInitialized: "Database not initialized.",
+    oauthEmailAlreadyBound: "User already has a bound email address",
+    emailStatusUpdateFailed: "Failed to update email status records",
+
 	IncorrectPwd: 'Incorrect password',
 	addAccountDisabled: 'Add Email Address feature is disabled',
 	regDisabled: 'Sign up is disabled',

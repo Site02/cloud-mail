@@ -32,6 +32,14 @@
 
 只需要一个域名，就可以创建多个不同的邮箱，类似各大邮箱平台，本项目支持署到 Cloudflare Workers ，降低服务器成本，搭建自己的邮箱服务
 
+## 界面语言
+
+支持简体中文（`zh`）、繁體中文（`zh-TW`）和 English（`en`），可在「个人设置 → 系统语言」切换。首次访问时，浏览器语言为 `zh-TW`、`zh-HK`、`zh-MO` 或 `zh-Hant` 会自动使用繁体中文；已保存的语言选择会继续保留。
+
+繁体中文包含前端界面、Element Plus 组件、日期显示、TinyMCE 编辑器及后端错误和权限提示。前端、后端翻译分别位于 `mail-vue/src/i18n/zh-TW.js` 和 `mail-worker/src/i18n/zh-TW.js`，API 使用 `Accept-Language: zh-TW`（也支持 `zh-Hant`）选择繁体中文。
+
+安装两个项目的依赖后，在 `mail-vue` 目录运行 `npm run test:i18n` 检查翻译键、参数和语言切换，运行 `npm run build` 构建前端。
+
 ## 项目展示
 
 | ![](/doc/demo/demo.jpg)  | ![](/doc/demo/demo1.jpg) |

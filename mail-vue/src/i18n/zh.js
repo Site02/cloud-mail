@@ -1,4 +1,12 @@
 const zh = {
+    loggingIn: "登录中...",
+    registerEmail: "注册邮箱",
+    bindEmail: "绑定",
+    bindEmailRequired: "请注册绑定一个邮箱",
+    justNow: "几秒前",
+    minutesAgo: "{count}分钟前",
+    oneHourAgo: "1小时前",
+
     inbox: '收件箱',
     drafts: '草稿箱',
     sent: '已发送',
