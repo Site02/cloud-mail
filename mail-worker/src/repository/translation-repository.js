@@ -18,11 +18,18 @@ function ensureTranslationSchema(c) {
 	}
 	if (!schemaPromise) {
 		schemaPromise = (async () => {
-			try {
-				await c.env.db.batch(translationSchema.map(sql => c.env.db.prepare(sql)));
-			} catch (e) {
-				console.error('翻译表自愈失败', e?.message);
-				return false;
+			// 逐条执行而不是整批 batch：一条建索引失败不该连带把建表也回滚掉，
+			// 线上已经出现过“权限行在、表不在”的半初始化状态
+			let tableFailed = false;
+			for (const sql of translationSchema) {
+				try {
+					await c.env.db.prepare(sql).run();
+				} catch (e) {
+					console.error('翻译表自愈失败', e?.message);
+					if (/^\s*CREATE\s+TABLE/i.test(sql)) {
+						tableFailed = true;
+					}
+				}
 			}
 			try {
 				// 与 init 的 v3_4DB 保持同一份语句：缺权限行时工具栏按钮不显示
@@ -34,8 +41,9 @@ function ensureTranslationSchema(c) {
 			} catch (e) {
 				console.warn('翻译权限自愈失败', e?.message);
 			}
-			schemaReady = true;
-			return true;
+			// 建表没成功就不标记完成，下个请求会重试
+			schemaReady = !tableFailed;
+			return schemaReady;
 		})().finally(() => {
 			if (!schemaReady) {
 				schemaPromise = null;

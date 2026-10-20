@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import translationSchema from '../src/const/translation-schema';
 
@@ -6,8 +6,16 @@ import translationSchema from '../src/const/translation-schema';
 // 1. 模型把 JSON 包在 ```json 围栏/解释文字里 → 解析器必须仍然认得
 // 2. 模型漏了条目 → 逐条补译补齐，不能让整块作废
 // 3. 翻译表缺失（部署不会跑 /api/init）→ 首次请求自愈建表
-function createD1(sqlite) {
+// brokenIndex 用来模拟“某条索引建不出来”，验证自愈不会因为一条 DDL 失败而整体回滚
+function createD1(sqlite, { brokenIndex = false } = {}) {
 	function statement(sql, args) {
+		if (brokenIndex && /CREATE\s+(UNIQUE\s+)?INDEX[\s\S]*idx_translation_job_expire/i.test(sql)) {
+			return {
+				async first() { throw new Error('D1_ERROR: broken index'); },
+				async all() { throw new Error('D1_ERROR: broken index'); },
+				async run() { throw new Error('D1_ERROR: broken index'); }
+			};
+		}
 		return {
 			async first() {
 				const row = sqlite.prepare(sql).get(...args);
@@ -110,7 +118,7 @@ function createAi(behavior) {
 const HTML = '<div><p>Hello <b>world</b></p><p>Second</p></div>';
 
 // withTranslationTables=false 用来复现“生产库没建过翻译表”的状态
-function build({ behavior, withTranslationTables = true } = {}) {
+function build({ behavior, withTranslationTables = true, brokenIndex = false } = {}) {
 	const sqlite = new DatabaseSync(':memory:');
 	sqlite.exec('CREATE TABLE email (email_id INTEGER PRIMARY KEY, account_id INTEGER, user_id INTEGER, content TEXT, text TEXT, is_del INTEGER DEFAULT 0)');
 	sqlite.exec('CREATE TABLE account (account_id INTEGER PRIMARY KEY, user_id INTEGER, is_del INTEGER DEFAULT 0)');
@@ -122,7 +130,7 @@ function build({ behavior, withTranslationTables = true } = {}) {
 	sqlite.exec('INSERT INTO account (account_id, user_id, is_del) VALUES (3, 1, 0)');
 	sqlite.prepare('INSERT INTO email (email_id, account_id, user_id, content, text, is_del) VALUES (7, 3, 1, ?, ?, 0)')
 		.run(HTML, 'Hello world');
-	const env = { db: createD1(sqlite), kv: createKv(), ai: createAi(behavior) };
+	const env = { db: createD1(sqlite, { brokenIndex }), kv: createKv(), ai: createAi(behavior) };
 	return { c: { env }, sqlite, env };
 }
 
@@ -139,6 +147,8 @@ describe('translation resilience', () => {
 	// 必须放在最前面：自愈只在模块生命周期内做一次，先跑才能复现“刚部署没建表”
 	it('翻译表缺失时首次请求自愈建表', async () => {
 		const { c, sqlite } = build({ withTranslationTables: false });
+		// schemaReady 是模块级状态，重置后才是“刚部署”的样子
+		vi.resetModules();
 		const { default: service } = await import('../src/service/email-translation-service.js');
 
 		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
@@ -147,6 +157,22 @@ describe('translation resilience', () => {
 		expect(done.state).toBe('done');
 		expect(done.content).toContain('[译]Hello');
 		expect(sqlite.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'email_translation'").get().n).toBe(1);
+	});
+
+	it('单条 DDL 失败不会连累建表与翻译', async () => {
+		// 旧实现把整批 DDL 放一个 batch：一条索引失败会把建表一起回滚，
+		// 线上因此留下“权限行在、表不在”的半初始化状态
+		const { c, sqlite } = build({ withTranslationTables: false, brokenIndex: true });
+		vi.resetModules();
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		const done = await runToEnd(c, service, payload);
+
+		expect(done.state).toBe('done');
+		const tables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'translation%' OR name = 'email_translation'").all().map(row => row.name);
+		expect(tables).toContain('email_translation');
+		expect(tables).toContain('translation_quota');
 	});
 
 	it('模型把 JSON 包在围栏和说明文字里也能解析', async () => {

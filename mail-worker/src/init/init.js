@@ -45,10 +45,14 @@ const dbInit = {
 	// 返回失败原因而不是静默吞掉：翻译表缺失时接口会 500，运维必须能看到
 	async v3_4DB(c) {
 		const errors = [];
-		try {
-			await c.env.db.batch(translationSchema.map(sql => c.env.db.prepare(sql)));
-		} catch (e) {
-			errors.push('翻译表：' + e.message);
+		// 逐条执行：整批 batch 里一条建索引失败会把建表一起回滚，
+		// 留下“权限行在、表不在”的半初始化状态（线上踩过）
+		for (const sql of translationSchema) {
+			try {
+				await c.env.db.prepare(sql).run();
+			} catch (e) {
+				errors.push('翻译表：' + e.message);
+			}
 		}
 
 		try {
