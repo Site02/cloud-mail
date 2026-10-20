@@ -405,6 +405,13 @@ const ko = {
         "retry": "다시 시도"
     },
     "temporaryInbox": {
+        domainLabel: "이메일 도메인",
+        randomDomain: "무작위 도메인",
+        domainHint: "도메인을 변경해도 사용자 이름은 유지됩니다.",
+        randomDomainHint: "다음 주소는 무작위 도메인으로 생성됩니다.",
+        newUsername: "사용자 이름 변경",
+        updatingAddress: "주소 업데이트 중…",
+
         "shortName": "임시 메일함",
         "description": "최근 메일과 인증 코드를 확인하고 기기에 사본을 저장하는 임시 메일함.",
         "noActiveAddress": "사용 중인 주소가 없습니다",

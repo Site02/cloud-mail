@@ -1,0 +1,6 @@
+v24.19.0
+arm64
+
+System-wide memory free percentage: 45%
+
+System-wide memory free percentage: 40%

@@ -10,9 +10,12 @@ function configuredDomains(env) {
 }
 
 const inboxAccessService = {
-	async create(c) {
+	async create(c, params = {}) {
 		const domains = configuredDomains(c.env);
-		const domain = domains[Math.floor(Math.random() * domains.length)];
+		if (params.domain !== undefined && (typeof params.domain !== 'string' || !domains.includes(params.domain))) {
+			throw new BizError(t(c, 'incompleteParameters'), 400);
+		}
+		const domain = params.domain ?? domains[Math.floor(Math.random() * domains.length)];
 		if (!domain) throw new BizError(t(c, 'tempDomainMissing'), 503);
 
 		for (let attempt = 0; attempt < 3; attempt++) {

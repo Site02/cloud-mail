@@ -439,6 +439,13 @@ const vi = {
     "retry": "Thử lại"
   },
   "temporaryInbox": {
+        domainLabel: "Tên miền email",
+        randomDomain: "Tên miền ngẫu nhiên",
+        domainHint: "Đổi tên miền sẽ giữ nguyên tên người dùng.",
+        randomDomainHint: "Địa chỉ tiếp theo sẽ dùng tên miền ngẫu nhiên.",
+        newUsername: "Tên người dùng mới",
+        updatingAddress: "Đang cập nhật địa chỉ…",
+
     "shortName": "Thư tạm",
     "description": "Hộp thư tạm thời cho email gần đây và mã xác minh, lưu bản sao trên thiết bị.",
     "noActiveAddress": "Không có địa chỉ hoạt động",

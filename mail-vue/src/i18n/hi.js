@@ -434,6 +434,13 @@ export default {
     "retry": "पुनः प्रयास करें"
   },
   "temporaryInbox": {
+        domainLabel: "ईमेल डोमेन",
+        randomDomain: "यादृच्छिक डोमेन",
+        domainHint: "डोमेन बदलने पर उपयोगकर्ता नाम वही रहेगा।",
+        randomDomainHint: "अगला पता किसी यादृच्छिक डोमेन का उपयोग करेगा।",
+        newUsername: "नया उपयोगकर्ता नाम",
+        updatingAddress: "पता अपडेट हो रहा है…",
+
     "shortName": "अस्थायी मेल",
     "description": "हाल के ईमेल और सत्यापन कोड के लिए अस्थायी इनबॉक्स; प्रतियाँ डिवाइस पर सहेजी जाती हैं।",
     "noActiveAddress": "कोई सक्रिय पता नहीं",

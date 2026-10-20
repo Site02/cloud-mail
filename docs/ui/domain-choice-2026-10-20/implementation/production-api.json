@@ -1,0 +1,32 @@
+[
+  {
+    "domain": "okkmail.cc",
+    "httpStatus": 200,
+    "businessCode": 200,
+    "suffix": "okkmail.cc"
+  },
+  {
+    "domain": "qtmail.click",
+    "httpStatus": 200,
+    "businessCode": 200,
+    "suffix": "qtmail.click"
+  },
+  {
+    "domain": "qtgmail.click",
+    "httpStatus": 200,
+    "businessCode": 200,
+    "suffix": "qtgmail.click"
+  },
+  {
+    "domain": "not-allowed.test",
+    "httpStatus": 200,
+    "businessCode": 400,
+    "suffix": ""
+  },
+  {
+    "domain": null,
+    "httpStatus": 200,
+    "businessCode": 200,
+    "suffix": "qtmail.click"
+  }
+]

@@ -12,7 +12,8 @@
     "check:locale": "node tools/check-locale-candidate.mjs",
     "check:mail-flows": "node tools/verify-mail-flows.cjs",
     "preview": "vite preview",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "check:domain-choice": "node tools/verify-domain-choice.cjs"
   },
   "dependencies": {
     "@iconify/vue": "^4.3.0",

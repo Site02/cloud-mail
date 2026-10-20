@@ -405,6 +405,13 @@ const de = {
         "retry": "Erneut versuchen"
     },
     "temporaryInbox": {
+        domainLabel: "E-Mail-Domain",
+        randomDomain: "Zufällige Domain",
+        domainHint: "Beim Domainwechsel bleibt der Benutzername erhalten.",
+        randomDomainHint: "Die nächste Adresse erhält eine zufällige Domain.",
+        newUsername: "Neuer Benutzername",
+        updatingAddress: "Adresse wird aktualisiert…",
+
         "shortName": "Temp. Postfach",
         "description": "Temporäres Postfach für aktuelle E-Mails und Bestätigungscodes mit lokal gespeicherten Kopien.",
         "noActiveAddress": "Keine aktive Adresse",

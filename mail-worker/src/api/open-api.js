@@ -7,7 +7,14 @@ import inboxAccessService from '../service/inbox-access-service';
 
 app.post('/open/inbox', async (c) => {
 	c.header('Cache-Control', 'no-store');
-	return c.json(result.ok(await inboxAccessService.create(c)));
+	let input = {};
+	try {
+		const raw = await c.req.text();
+		input = raw ? JSON.parse(raw) : {};
+		if (input === null) input = {};
+		if (typeof input !== 'object' || Array.isArray(input)) throw new Error();
+	} catch { throw new BizError(t(c, 'incompleteParameters'), 400); }
+	return c.json(result.ok(await inboxAccessService.create(c, input)));
 });
 
 // /open 前缀在 security.js 的 exclude 里，免鉴权

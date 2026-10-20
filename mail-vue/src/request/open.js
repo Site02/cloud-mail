@@ -1,8 +1,8 @@
 import http from '@/axios/index.js';
 
 // 公开接口，不需要登录
-export function openCreateInbox() {
-    return http.post('/open/inbox', null, {noMsg: true})
+export function openCreateInbox(domain) {
+    return http.post('/open/inbox', domain ? {domain} : null, {noMsg: true})
 }
 
 export function openRecentMails(address, before) {

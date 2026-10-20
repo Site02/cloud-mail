@@ -1,0 +1,437 @@
+[
+  {
+    "width": 1440,
+    "lang": "zh",
+    "dark": false,
+    "initial": true,
+    "domainChange": true,
+    "prefixPreserved": true,
+    "newUsername": true,
+    "preferenceReload": true,
+    "randomMode": true,
+    "historyIsolation": true,
+    "errorsRecover": true,
+    "staleCreateDiscarded": true,
+    "staleSwitchDiscarded": true,
+    "offline": true,
+    "measured": {
+      "overflow": false,
+      "dark": false,
+      "direction": "ltr",
+      "styles": [
+        {
+          "selector": "#tm-domain",
+          "color": "rgb(23, 36, 50)",
+          "background": "rgb(255, 255, 255)",
+          "font": "15px",
+          "outline": "rgb(23, 92, 211)",
+          "height": 46
+        },
+        {
+          "selector": ".tm-domain-control label",
+          "color": "rgb(23, 36, 50)",
+          "background": "rgba(0, 0, 0, 0)",
+          "font": "13px",
+          "outline": "rgb(23, 36, 50)",
+          "height": 19.5
+        },
+        {
+          "selector": ".tm-domain-hint",
+          "color": "rgb(82, 97, 116)",
+          "background": "rgba(0, 0, 0, 0)",
+          "font": "12px",
+          "outline": "rgb(82, 97, 116)",
+          "height": 18
+        },
+        {
+          "selector": ".tm-new-username",
+          "color": "rgb(23, 36, 50)",
+          "background": "rgb(255, 255, 255)",
+          "font": "13px",
+          "outline": "rgb(23, 36, 50)",
+          "height": 44
+        },
+        {
+          "selector": ".tm-address-copy",
+          "color": "rgb(23, 36, 50)",
+          "background": "rgb(237, 242, 248)",
+          "font": "18px",
+          "outline": "rgb(23, 36, 50)",
+          "height": 74.78125
+        },
+        {
+          "selector": ".tm-history-item.is-active",
+          "color": "rgb(23, 92, 211)",
+          "background": "rgb(237, 242, 248)",
+          "font": "14px",
+          "outline": "rgb(23, 92, 211)",
+          "height": 57
+        }
+      ]
+    },
+    "errors": []
+  },
+  {
+    "domainListFailureVisible": true
+  },
+  {
+    "width": 390,
+    "lang": "en",
+    "dark": false,
+    "initial": true,
+    "domainChange": true,
+    "prefixPreserved": true,
+    "newUsername": true,
+    "preferenceReload": true,
+    "randomMode": true,
+    "historyIsolation": true,
+    "errorsRecover": true,
+    "staleCreateDiscarded": true,
+    "staleSwitchDiscarded": true,
+    "offline": true,
+    "measured": {
+      "overflow": false,
+      "dark": false,
+      "direction": "ltr",
+      "styles": [
+        {
+          "selector": "#tm-domain",
+          "color": "rgb(23, 36, 50)",
+          "background": "rgb(255, 255, 255)",
+          "font": "15px",
+          "outline": "rgb(23, 92, 211)",
+          "height": 46
+        },
+        {
+          "selector": ".tm-domain-control label",
+          "color": "rgb(23, 36, 50)",
+          "background": "rgba(0, 0, 0, 0)",
+          "font": "13px",
+          "outline": "rgb(23, 36, 50)",
+          "height": 19.5
+        },
+        {
+          "selector": ".tm-domain-hint",
+          "color": "rgb(82, 97, 116)",
+          "background": "rgba(0, 0, 0, 0)",
+          "font": "12px",
+          "outline": "rgb(82, 97, 116)",
+          "height": 18
+        },
+        {
+          "selector": ".tm-new-username",
+          "color": "rgb(23, 36, 50)",
+          "background": "rgb(255, 255, 255)",
+          "font": "13px",
+          "outline": "rgb(23, 36, 50)",
+          "height": 44
+        },
+        {
+          "selector": ".tm-address-copy",
+          "color": "rgb(23, 36, 50)",
+          "background": "rgb(237, 242, 248)",
+          "font": "16px",
+          "outline": "rgb(23, 36, 50)",
+          "height": 69.59375
+        },
+        {
+          "selector": ".tm-history-item.is-active",
+          "color": "rgb(23, 92, 211)",
+          "background": "rgb(237, 242, 248)",
+          "font": "14px",
+          "outline": "rgb(23, 92, 211)",
+          "height": 57
+        }
+      ]
+    },
+    "errors": []
+  },
+  {
+    "width": 375,
+    "lang": "ru",
+    "dark": false,
+    "initial": true,
+    "domainChange": true,
+    "prefixPreserved": true,
+    "newUsername": true,
+    "preferenceReload": true,
+    "randomMode": true,
+    "historyIsolation": true,
+    "errorsRecover": true,
+    "staleCreateDiscarded": true,
+    "staleSwitchDiscarded": true,
+    "offline": true,
+    "measured": {
+      "overflow": false,
+      "dark": false,
+      "direction": "ltr",
+      "styles": [
+        {
+          "selector": "#tm-domain",
+          "color": "rgb(23, 36, 50)",
+          "background": "rgb(255, 255, 255)",
+          "font": "15px",
+          "outline": "rgb(23, 92, 211)",
+          "height": 46
+        },
+        {
+          "selector": ".tm-domain-control label",
+          "color": "rgb(23, 36, 50)",
+          "background": "rgba(0, 0, 0, 0)",
+          "font": "13px",
+          "outline": "rgb(23, 36, 50)",
+          "height": 19.5
+        },
+        {
+          "selector": ".tm-domain-hint",
+          "color": "rgb(82, 97, 116)",
+          "background": "rgba(0, 0, 0, 0)",
+          "font": "12px",
+          "outline": "rgb(82, 97, 116)",
+          "height": 18
+        },
+        {
+          "selector": ".tm-new-username",
+          "color": "rgb(23, 36, 50)",
+          "background": "rgb(255, 255, 255)",
+          "font": "13px",
+          "outline": "rgb(23, 36, 50)",
+          "height": 44
+        },
+        {
+          "selector": ".tm-address-copy",
+          "color": "rgb(23, 36, 50)",
+          "background": "rgb(237, 242, 248)",
+          "font": "16px",
+          "outline": "rgb(23, 36, 50)",
+          "height": 69.59375
+        },
+        {
+          "selector": ".tm-history-item.is-active",
+          "color": "rgb(23, 92, 211)",
+          "background": "rgb(237, 242, 248)",
+          "font": "14px",
+          "outline": "rgb(23, 92, 211)",
+          "height": 57
+        }
+      ]
+    },
+    "errors": []
+  },
+  {
+    "width": 768,
+    "lang": "de",
+    "dark": true,
+    "initial": true,
+    "domainChange": true,
+    "prefixPreserved": true,
+    "newUsername": true,
+    "preferenceReload": true,
+    "randomMode": true,
+    "historyIsolation": true,
+    "errorsRecover": true,
+    "staleCreateDiscarded": true,
+    "staleSwitchDiscarded": true,
+    "offline": true,
+    "measured": {
+      "overflow": false,
+      "dark": true,
+      "direction": "ltr",
+      "styles": [
+        {
+          "selector": "#tm-domain",
+          "color": "rgb(239, 243, 248)",
+          "background": "rgb(21, 31, 44)",
+          "font": "15px",
+          "outline": "rgb(140, 196, 255)",
+          "height": 46
+        },
+        {
+          "selector": ".tm-domain-control label",
+          "color": "rgb(239, 243, 248)",
+          "background": "rgba(0, 0, 0, 0)",
+          "font": "13px",
+          "outline": "rgb(239, 243, 248)",
+          "height": 19.5
+        },
+        {
+          "selector": ".tm-domain-hint",
+          "color": "rgb(167, 181, 197)",
+          "background": "rgba(0, 0, 0, 0)",
+          "font": "12px",
+          "outline": "rgb(167, 181, 197)",
+          "height": 18
+        },
+        {
+          "selector": ".tm-new-username",
+          "color": "rgb(239, 243, 248)",
+          "background": "rgb(21, 31, 44)",
+          "font": "13px",
+          "outline": "rgb(239, 243, 248)",
+          "height": 44
+        },
+        {
+          "selector": ".tm-address-copy",
+          "color": "rgb(239, 243, 248)",
+          "background": "rgb(29, 43, 59)",
+          "font": "18px",
+          "outline": "rgb(239, 243, 248)",
+          "height": 51.390625
+        },
+        {
+          "selector": ".tm-history-item.is-active",
+          "color": "rgb(140, 196, 255)",
+          "background": "rgb(29, 43, 59)",
+          "font": "14px",
+          "outline": "rgb(140, 196, 255)",
+          "height": 48
+        }
+      ]
+    },
+    "errors": []
+  },
+  {
+    "width": 320,
+    "lang": "ar",
+    "dark": true,
+    "initial": true,
+    "domainChange": true,
+    "prefixPreserved": true,
+    "newUsername": true,
+    "preferenceReload": true,
+    "randomMode": true,
+    "historyIsolation": true,
+    "errorsRecover": true,
+    "staleCreateDiscarded": true,
+    "staleSwitchDiscarded": true,
+    "offline": true,
+    "measured": {
+      "overflow": false,
+      "dark": true,
+      "direction": "rtl",
+      "styles": [
+        {
+          "selector": "#tm-domain",
+          "color": "rgb(239, 243, 248)",
+          "background": "rgb(21, 31, 44)",
+          "font": "15px",
+          "outline": "rgb(140, 196, 255)",
+          "height": 46
+        },
+        {
+          "selector": ".tm-domain-control label",
+          "color": "rgb(239, 243, 248)",
+          "background": "rgba(0, 0, 0, 0)",
+          "font": "13px",
+          "outline": "rgb(239, 243, 248)",
+          "height": 19.5
+        },
+        {
+          "selector": ".tm-domain-hint",
+          "color": "rgb(167, 181, 197)",
+          "background": "rgba(0, 0, 0, 0)",
+          "font": "12px",
+          "outline": "rgb(167, 181, 197)",
+          "height": 18
+        },
+        {
+          "selector": ".tm-new-username",
+          "color": "rgb(239, 243, 248)",
+          "background": "rgb(21, 31, 44)",
+          "font": "13px",
+          "outline": "rgb(239, 243, 248)",
+          "height": 44
+        },
+        {
+          "selector": ".tm-address-copy",
+          "color": "rgb(239, 243, 248)",
+          "background": "rgb(29, 43, 59)",
+          "font": "16px",
+          "outline": "rgb(239, 243, 248)",
+          "height": 69.59375
+        },
+        {
+          "selector": ".tm-history-item.is-active",
+          "color": "rgb(140, 196, 255)",
+          "background": "rgb(29, 43, 59)",
+          "font": "14px",
+          "outline": "rgb(140, 196, 255)",
+          "height": 57
+        }
+      ]
+    },
+    "errors": []
+  },
+  {
+    "width": 375,
+    "lang": "hi",
+    "dark": false,
+    "initial": true,
+    "domainChange": true,
+    "prefixPreserved": true,
+    "newUsername": true,
+    "preferenceReload": true,
+    "randomMode": true,
+    "historyIsolation": true,
+    "errorsRecover": true,
+    "staleCreateDiscarded": true,
+    "staleSwitchDiscarded": true,
+    "offline": true,
+    "measured": {
+      "overflow": false,
+      "dark": false,
+      "direction": "ltr",
+      "styles": [
+        {
+          "selector": "#tm-domain",
+          "color": "rgb(23, 36, 50)",
+          "background": "rgb(255, 255, 255)",
+          "font": "15px",
+          "outline": "rgb(23, 92, 211)",
+          "height": 46
+        },
+        {
+          "selector": ".tm-domain-control label",
+          "color": "rgb(23, 36, 50)",
+          "background": "rgba(0, 0, 0, 0)",
+          "font": "13px",
+          "outline": "rgb(23, 36, 50)",
+          "height": 19.5
+        },
+        {
+          "selector": ".tm-domain-hint",
+          "color": "rgb(82, 97, 116)",
+          "background": "rgba(0, 0, 0, 0)",
+          "font": "12px",
+          "outline": "rgb(82, 97, 116)",
+          "height": 18
+        },
+        {
+          "selector": ".tm-new-username",
+          "color": "rgb(23, 36, 50)",
+          "background": "rgb(255, 255, 255)",
+          "font": "13px",
+          "outline": "rgb(23, 36, 50)",
+          "height": 44
+        },
+        {
+          "selector": ".tm-address-copy",
+          "color": "rgb(23, 36, 50)",
+          "background": "rgb(237, 242, 248)",
+          "font": "16px",
+          "outline": "rgb(23, 36, 50)",
+          "height": 69.59375
+        },
+        {
+          "selector": ".tm-history-item.is-active",
+          "color": "rgb(23, 92, 211)",
+          "background": "rgb(237, 242, 248)",
+          "font": "14px",
+          "outline": "rgb(23, 92, 211)",
+          "height": 57
+        }
+      ]
+    },
+    "errors": []
+  }
+]

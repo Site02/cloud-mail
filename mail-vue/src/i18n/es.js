@@ -405,6 +405,13 @@ const es = {
         "retry": "Reintentar"
     },
     "temporaryInbox": {
+        domainLabel: "Dominio del correo",
+        randomDomain: "Dominio aleatorio",
+        domainHint: "Cambiar de dominio conserva el nombre de usuario.",
+        randomDomainHint: "La próxima dirección usará un dominio aleatorio.",
+        newUsername: "Nuevo nombre de usuario",
+        updatingAddress: "Actualizando dirección…",
+
         "shortName": "Buzón temporal",
         "description": "Buzón temporal para correos recientes y códigos de verificación, con copias guardadas en el dispositivo.",
         "noActiveAddress": "No hay ninguna dirección activa",

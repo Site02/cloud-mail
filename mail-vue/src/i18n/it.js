@@ -439,6 +439,13 @@ const it = {
         "retry": "Riprova"
     },
     "temporaryInbox": {
+        domainLabel: "Dominio email",
+        randomDomain: "Dominio casuale",
+        domainHint: "Cambiare dominio mantiene il nome utente.",
+        randomDomainHint: "Il prossimo indirizzo userà un dominio casuale.",
+        newUsername: "Nuovo nome utente",
+        updatingAddress: "Aggiornamento dell’indirizzo…",
+
         "shortName": "Posta temp.",
         "description": "Casella temporanea per e-mail recenti e codici di verifica, con copie salvate sul dispositivo.",
         "noActiveAddress": "Nessun indirizzo attivo",

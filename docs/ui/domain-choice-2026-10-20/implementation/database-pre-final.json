@@ -1,0 +1,174 @@
+{
+  "at": "2026-10-20T07:52:26.994896+00:00",
+  "daily": {
+    "data": {
+      "viewer": {
+        "accounts": [
+          {
+            "d1AnalyticsAdaptiveGroups": [
+              {
+                "dimensions": {
+                  "date": "2026-10-19"
+                },
+                "sum": {
+                  "readQueries": 13179,
+                  "rowsRead": 28008
+                }
+              },
+              {
+                "dimensions": {
+                  "date": "2026-10-20"
+                },
+                "sum": {
+                  "readQueries": 6881,
+                  "rowsRead": 12120
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "errors": null
+  },
+  "queries": [
+    {
+      "sql": "EXPLAIN QUERY PLAN SELECT 1 FROM account WHERE email COLLATE NOCASE = ? LIMIT 1",
+      "response": {
+        "result": [
+          {
+            "results": [
+              {
+                "id": 3,
+                "parent": 0,
+                "notused": 39,
+                "detail": "SEARCH account USING COVERING INDEX idx_account_email_nocase (email=?)"
+              }
+            ],
+            "success": true,
+            "meta": {
+              "served_by": "v3-prod",
+              "served_by_region": "WNAM",
+              "served_by_colo": "SJC",
+              "served_by_primary": true,
+              "timings": {
+                "sql_duration_ms": 0.1286
+              },
+              "duration": 0.1286,
+              "changes": 0,
+              "last_row_id": 0,
+              "changed_db": false,
+              "size_after": 82808832,
+              "rows_read": 0,
+              "rows_written": 0,
+              "total_attempts": 1
+            }
+          }
+        ],
+        "errors": [],
+        "messages": [],
+        "success": true
+      }
+    },
+    {
+      "sql": "SELECT 1 FROM account WHERE email COLLATE NOCASE = ? LIMIT 1",
+      "response": {
+        "result": [
+          {
+            "results": [],
+            "success": true,
+            "meta": {
+              "served_by": "v3-prod",
+              "served_by_region": "WNAM",
+              "served_by_colo": "SJC",
+              "served_by_primary": true,
+              "timings": {
+                "sql_duration_ms": 0.2001
+              },
+              "duration": 0.2001,
+              "changes": 0,
+              "last_row_id": 0,
+              "changed_db": false,
+              "size_after": 82808832,
+              "rows_read": 0,
+              "rows_written": 0,
+              "total_attempts": 1
+            }
+          }
+        ],
+        "errors": [],
+        "messages": [],
+        "success": true
+      }
+    },
+    {
+      "sql": "EXPLAIN QUERY PLAN SELECT email_id AS emailId,\n\t\t\t        send_email AS sendEmail,\n\t\t\t        name       AS sendName,\n\t\t\t        subject,\n\t\t\t        code,\n\t\t\t        create_time AS createTime\n\t\t\t FROM email INDEXED BY idx_email_to_email_nocase\n\t\t\t WHERE to_email COLLATE NOCASE = ?\n\t\t\t   AND type = 0\n\t\t\t   AND is_del = 0\n\t\t\t   AND user_id = 0 AND account_id = 0\n\t\t\t   AND email_id < ?\n\t\t\t ORDER BY email_id DESC\n\t\t\t LIMIT 20",
+      "response": {
+        "result": [
+          {
+            "results": [
+              {
+                "id": 5,
+                "parent": 0,
+                "notused": 50,
+                "detail": "SEARCH email USING INDEX idx_email_to_email_nocase (to_email=? AND rowid<?)"
+              }
+            ],
+            "success": true,
+            "meta": {
+              "served_by": "v3-prod",
+              "served_by_region": "WNAM",
+              "served_by_colo": "SJC",
+              "served_by_primary": true,
+              "timings": {
+                "sql_duration_ms": 0.2193
+              },
+              "duration": 0.2193,
+              "changes": 0,
+              "last_row_id": 0,
+              "changed_db": false,
+              "size_after": 82808832,
+              "rows_read": 0,
+              "rows_written": 0,
+              "total_attempts": 1
+            }
+          }
+        ],
+        "errors": [],
+        "messages": [],
+        "success": true
+      }
+    },
+    {
+      "sql": "SELECT email_id AS emailId,\n\t\t\t        send_email AS sendEmail,\n\t\t\t        name       AS sendName,\n\t\t\t        subject,\n\t\t\t        code,\n\t\t\t        create_time AS createTime\n\t\t\t FROM email INDEXED BY idx_email_to_email_nocase\n\t\t\t WHERE to_email COLLATE NOCASE = ?\n\t\t\t   AND type = 0\n\t\t\t   AND is_del = 0\n\t\t\t   AND user_id = 0 AND account_id = 0\n\t\t\t   AND email_id < ?\n\t\t\t ORDER BY email_id DESC\n\t\t\t LIMIT 20",
+      "response": {
+        "result": [
+          {
+            "results": [],
+            "success": true,
+            "meta": {
+              "served_by": "v3-prod",
+              "served_by_region": "WNAM",
+              "served_by_colo": "SJC",
+              "served_by_primary": true,
+              "timings": {
+                "sql_duration_ms": 0.4247
+              },
+              "duration": 0.4247,
+              "changes": 0,
+              "last_row_id": 0,
+              "changed_db": false,
+              "size_after": 82808832,
+              "rows_read": 1,
+              "rows_written": 0,
+              "total_attempts": 1
+            }
+          }
+        ],
+        "errors": [],
+        "messages": [],
+        "success": true
+      }
+    }
+  ]
+}

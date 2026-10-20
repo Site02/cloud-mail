@@ -1,0 +1,67 @@
+{
+  "createdAt": "2026-10-20T08:20:59.453243+00:00",
+  "host": "Darwin",
+  "status": "DESIGN_REVIEW_ARTIFACT_NOT_PRODUCT_ACCEPTANCE",
+  "title": "临时邮箱 · 域名选择",
+  "environment": "设计模拟与实现夹具测试；生产检查另见记录",
+  "frames": [
+    {
+      "id": "desktop",
+      "file": "design/desktop.jpg",
+      "sha256": "40addb6217f94ccf6433455ec1192f024b3d07ec5312dcca99da0d6cfd99e3d0",
+      "verification": "inspected"
+    },
+    {
+      "id": "phone",
+      "file": "design/phone.jpg",
+      "sha256": "fb0a60fa2e4bea6fd0ef66b3af6c047981aabadc5f18e31ca96688794d7bd2a3",
+      "verification": "inspected"
+    },
+    {
+      "id": "phone-switched",
+      "file": "design/phone-switched.jpg",
+      "sha256": "5465d6650ce4db89ff68a3375c595f49bd35116ded0afb48923c868ec13d4f8c",
+      "verification": "inspected"
+    },
+    {
+      "id": "phone-dark",
+      "file": "design/phone-dark.jpg",
+      "sha256": "7a4f96aab175c5cc9f7196c14e3f1714a34c20550b371ef8e5d5d09bed7bbb2a",
+      "verification": "inspected"
+    },
+    {
+      "id": "actual-desktop",
+      "file": "implementation/1440-zh-light.png",
+      "sha256": "634d4324261356f3eaf7a56a168280758431d182e2938efa4861f483e6ea407e",
+      "verification": "inspected"
+    },
+    {
+      "id": "actual-phone",
+      "file": "implementation/390-en-light.png",
+      "sha256": "bc05cdd4d4b265a93d929e2f3a011b965cc4b2377317f2da6bc52d03eb52ad17",
+      "verification": "inspected"
+    },
+    {
+      "id": "actual-rtl",
+      "file": "implementation/320-ar-dark.png",
+      "sha256": "df2b85e9f38a2848c3e9675caaeb07144dd737a41f8c3d717b3842389ecf923d",
+      "verification": "inspected"
+    },
+    {
+      "id": "actual-hi",
+      "file": "implementation/375-hi-light.png",
+      "sha256": "25663c2b3e0c8baded3d3eb28d95800604e2b021a9b9e9dade1118afa50344eb",
+      "verification": "inspected"
+    },
+    {
+      "id": "production",
+      "file": "implementation/production-desktop.jpg",
+      "sha256": "ec6e307b79c2dde04167c5360adf06ca068350542b37a29f37ae3042769e55e7",
+      "verification": "inspected"
+    }
+  ],
+  "outputs": {
+    "review-board.html": "7241b4d6de2f3eab7db53eea3173143fc5ed2a065e0407fb61be3b6de7958993",
+    "workflow-board.svg": "f7cbdd914cb9d675ef64e6b95138bd04dad79ef68d5957aecca0799bce200873"
+  }
+}

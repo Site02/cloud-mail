@@ -405,6 +405,13 @@ const fr = {
         "retry": "Réessayer"
     },
     "temporaryInbox": {
+        domainLabel: "Domaine de messagerie",
+        randomDomain: "Domaine aléatoire",
+        domainHint: "Le changement de domaine conserve le nom d’utilisateur.",
+        randomDomainHint: "La prochaine adresse utilisera un domaine aléatoire.",
+        newUsername: "Nouveau nom d’utilisateur",
+        updatingAddress: "Mise à jour de l’adresse…",
+
         "shortName": "Boîte temp.",
         "description": "Boîte temporaire pour les messages récents et les codes de vérification, avec des copies enregistrées sur l’appareil.",
         "noActiveAddress": "Aucune adresse active",

@@ -434,6 +434,13 @@ export default {
     "retry": "حاول مرة أخرى"
   },
   "temporaryInbox": {
+        domainLabel: "نطاق البريد الإلكتروني",
+        randomDomain: "نطاق عشوائي",
+        domainHint: "يبقى اسم المستخدم كما هو عند تغيير النطاق.",
+        randomDomainHint: "سيستخدم العنوان التالي نطاقًا عشوائيًا.",
+        newUsername: "اسم مستخدم جديد",
+        updatingAddress: "جارٍ تحديث العنوان…",
+
     "shortName": "بريد مؤقت",
     "description": "صندوق بريد مؤقت للرسائل الحديثة ورموز التحقق مع نسخ محفوظة على الجهاز.",
     "noActiveAddress": "لا يوجد عنوان نشط",

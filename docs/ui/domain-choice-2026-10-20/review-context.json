@@ -1,0 +1,310 @@
+{
+  "schemaVersion": 1,
+  "projectId": "project-a18bef2f76c0",
+  "currentVersion": "review-700ce26602e0",
+  "title": "临时邮箱 · 域名选择",
+  "versions": [
+    {
+      "id": "review-f95254c5b340",
+      "title": "临时邮箱 · 域名选择",
+      "frameIds": [
+        "desktop",
+        "phone",
+        "phone-switched",
+        "phone-dark"
+      ],
+      "frames": [
+        {
+          "id": "desktop",
+          "title": "桌面设计",
+          "file": "design/desktop.jpg",
+          "role": "临时邮箱使用者",
+          "entry": "已有邮箱",
+          "action": "选择后缀或更换用户名",
+          "result": "地址与收件箱保持一致",
+          "verification": "inspected",
+          "group": "design"
+        },
+        {
+          "id": "phone",
+          "title": "手机设计",
+          "file": "design/phone.jpg",
+          "role": "临时邮箱使用者",
+          "entry": "手机打开临时邮箱",
+          "action": "从地址卡片操作",
+          "result": "收件箱紧接地址显示",
+          "verification": "inspected",
+          "group": "design",
+          "presentation": "portrait"
+        },
+        {
+          "id": "phone-switched",
+          "title": "切换域名",
+          "file": "design/phone-switched.jpg",
+          "role": "临时邮箱使用者",
+          "entry": "已有qtmail地址",
+          "action": "选择qtgmail.click",
+          "result": "用户名保留，邮箱独立",
+          "verification": "inspected",
+          "group": "design",
+          "presentation": "portrait"
+        },
+        {
+          "id": "phone-dark",
+          "title": "深色设计",
+          "file": "design/phone-dark.jpg",
+          "role": "临时邮箱使用者",
+          "entry": "深色预览",
+          "action": "查看选择框与文字",
+          "result": "使用现有主题配色",
+          "verification": "inspected",
+          "group": "design",
+          "presentation": "portrait"
+        }
+      ],
+      "status": "archived"
+    },
+    {
+      "id": "review-dbf8f37c8e66",
+      "title": "临时邮箱 · 域名选择",
+      "frameIds": [
+        "desktop",
+        "phone",
+        "phone-switched",
+        "phone-dark",
+        "actual-desktop",
+        "actual-phone",
+        "actual-rtl",
+        "actual-hi"
+      ],
+      "frames": [
+        {
+          "id": "desktop",
+          "title": "桌面设计",
+          "file": "design/desktop.jpg",
+          "role": "临时邮箱使用者",
+          "entry": "已有邮箱",
+          "action": "选择后缀或更换用户名",
+          "result": "地址与收件箱保持一致",
+          "verification": "inspected",
+          "group": "design"
+        },
+        {
+          "id": "phone",
+          "title": "手机设计",
+          "file": "design/phone.jpg",
+          "role": "临时邮箱使用者",
+          "entry": "手机打开临时邮箱",
+          "action": "从地址卡片操作",
+          "result": "收件箱紧接地址显示",
+          "verification": "inspected",
+          "group": "design",
+          "presentation": "portrait"
+        },
+        {
+          "id": "phone-switched",
+          "title": "切换域名",
+          "file": "design/phone-switched.jpg",
+          "role": "临时邮箱使用者",
+          "entry": "已有qtmail地址",
+          "action": "选择qtgmail.click",
+          "result": "用户名保留，邮箱独立",
+          "verification": "inspected",
+          "group": "design",
+          "presentation": "portrait"
+        },
+        {
+          "id": "phone-dark",
+          "title": "深色设计",
+          "file": "design/phone-dark.jpg",
+          "role": "临时邮箱使用者",
+          "entry": "深色预览",
+          "action": "查看选择框与文字",
+          "result": "使用现有主题配色",
+          "verification": "inspected",
+          "group": "design",
+          "presentation": "portrait"
+        },
+        {
+          "id": "actual-desktop",
+          "title": "桌面实现",
+          "file": "implementation/1440-zh-light.png",
+          "role": "临时邮箱使用者",
+          "entry": "受控夹具",
+          "action": "选择qtmail.click",
+          "result": "后缀与独立收件箱一致",
+          "verification": "inspected",
+          "group": "implementation"
+        },
+        {
+          "id": "actual-phone",
+          "title": "手机实现",
+          "file": "implementation/390-en-light.png",
+          "role": "临时邮箱使用者",
+          "entry": "受控夹具",
+          "action": "切回历史邮箱",
+          "result": "完整显示域名，收件箱位于查询之前",
+          "verification": "inspected",
+          "group": "implementation",
+          "presentation": "portrait"
+        },
+        {
+          "id": "actual-rtl",
+          "title": "窄屏深色实现",
+          "file": "implementation/320-ar-dark.png",
+          "role": "临时邮箱使用者",
+          "entry": "受控夹具",
+          "action": "阿语320px操作域名选择",
+          "result": "地址LTR、页面RTL、无横向溢出",
+          "verification": "inspected",
+          "group": "implementation",
+          "presentation": "portrait"
+        },
+        {
+          "id": "actual-hi",
+          "title": "印地语实现",
+          "file": "implementation/375-hi-light.png",
+          "role": "临时邮箱使用者",
+          "entry": "Mac受控夹具",
+          "action": "检查字形及窄屏控件",
+          "result": "字形可读、域名和地址完整可见",
+          "verification": "inspected",
+          "group": "implementation",
+          "presentation": "portrait"
+        }
+      ],
+      "status": "archived"
+    },
+    {
+      "id": "review-700ce26602e0",
+      "title": "临时邮箱 · 域名选择",
+      "frameIds": [
+        "desktop",
+        "phone",
+        "phone-switched",
+        "phone-dark",
+        "actual-desktop",
+        "actual-phone",
+        "actual-rtl",
+        "actual-hi",
+        "production"
+      ],
+      "frames": [
+        {
+          "id": "desktop",
+          "title": "桌面设计",
+          "file": "design/desktop.jpg",
+          "role": "临时邮箱使用者",
+          "entry": "已有邮箱",
+          "action": "选择后缀或更换用户名",
+          "result": "地址与收件箱保持一致",
+          "verification": "inspected",
+          "group": "design"
+        },
+        {
+          "id": "phone",
+          "title": "手机设计",
+          "file": "design/phone.jpg",
+          "role": "临时邮箱使用者",
+          "entry": "手机打开临时邮箱",
+          "action": "从地址卡片操作",
+          "result": "收件箱紧接地址显示",
+          "verification": "inspected",
+          "group": "design",
+          "presentation": "portrait"
+        },
+        {
+          "id": "phone-switched",
+          "title": "切换域名",
+          "file": "design/phone-switched.jpg",
+          "role": "临时邮箱使用者",
+          "entry": "已有qtmail地址",
+          "action": "选择qtgmail.click",
+          "result": "用户名保留，邮箱独立",
+          "verification": "inspected",
+          "group": "design",
+          "presentation": "portrait"
+        },
+        {
+          "id": "phone-dark",
+          "title": "深色设计",
+          "file": "design/phone-dark.jpg",
+          "role": "临时邮箱使用者",
+          "entry": "深色预览",
+          "action": "查看选择框与文字",
+          "result": "使用现有主题配色",
+          "verification": "inspected",
+          "group": "design",
+          "presentation": "portrait"
+        },
+        {
+          "id": "actual-desktop",
+          "title": "桌面实现",
+          "file": "implementation/1440-zh-light.png",
+          "role": "临时邮箱使用者",
+          "entry": "受控夹具",
+          "action": "选择qtmail.click",
+          "result": "后缀与独立收件箱一致",
+          "verification": "inspected",
+          "group": "implementation"
+        },
+        {
+          "id": "actual-phone",
+          "title": "手机实现",
+          "file": "implementation/390-en-light.png",
+          "role": "临时邮箱使用者",
+          "entry": "受控夹具",
+          "action": "切回历史邮箱",
+          "result": "完整显示域名，收件箱位于查询之前",
+          "verification": "inspected",
+          "group": "implementation",
+          "presentation": "portrait"
+        },
+        {
+          "id": "actual-rtl",
+          "title": "窄屏深色实现",
+          "file": "implementation/320-ar-dark.png",
+          "role": "临时邮箱使用者",
+          "entry": "受控夹具",
+          "action": "阿语320px操作域名选择",
+          "result": "地址LTR、页面RTL、无横向溢出",
+          "verification": "inspected",
+          "group": "implementation",
+          "presentation": "portrait"
+        },
+        {
+          "id": "actual-hi",
+          "title": "印地语实现",
+          "file": "implementation/375-hi-light.png",
+          "role": "临时邮箱使用者",
+          "entry": "Mac受控夹具",
+          "action": "检查字形及窄屏控件",
+          "result": "字形可读、域名和地址完整可见",
+          "verification": "inspected",
+          "group": "implementation",
+          "presentation": "portrait"
+        },
+        {
+          "id": "production",
+          "title": "上线桌面结果",
+          "file": "implementation/production-desktop.jpg",
+          "role": "临时邮箱使用者",
+          "entry": "temp.okkmail.cc/find",
+          "action": "切换域名、更换用户名、重载、切回历史",
+          "result": "完整地址与后缀一致；历史保留",
+          "verification": "inspected",
+          "group": "production"
+        }
+      ],
+      "status": "current"
+    }
+  ],
+  "constraints": [
+    "设计图使用虚构邮箱与邮件。截图不是可编辑界面组件；本机备注不跨设备同步。"
+  ],
+  "feedback": {
+    "inbox": "review-feedback",
+    "endpoint": null,
+    "tokenEnv": "REVIEW_FEEDBACK_TOKEN"
+  }
+}

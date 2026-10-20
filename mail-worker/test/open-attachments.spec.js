@@ -102,6 +102,21 @@ describe('public attachments', () => {
     } finally { random.mockRestore(); }
   });
 
+  it('creates a requested configured suffix without silently changing it', async () => {
+    context.domain = ['okkmail.cc', 'qtmail.click', 'qtgmail.click'];
+    for (const domain of context.domain) {
+      const response = await app.request('http://localhost/open/inbox', {method:'POST', body:JSON.stringify({domain})}, context);
+      expect((await response.json()).data.address).toMatch(new RegExp('@' + domain.replace('.', '\\.') + '$'));
+    }
+  });
+
+  it('rejects unknown or malformed domain choices instead of generating a different mailbox', async () => {
+    for (const body of ['{', '[]', JSON.stringify({domain:123}), JSON.stringify({domain:'other.test'})]) {
+      const response = await app.request('http://localhost/open/inbox', {method:'POST',body}, context);
+      expect((await response.json()).code).toBe(400);
+    }
+  });
+
   it('issues a random public inbox address', async () => {
     const response = await app.request('http://localhost/open/inbox', {method: 'POST'}, context);
     const { data } = await response.json();

@@ -439,6 +439,13 @@ const en = {
         retry: 'Try again',
     },
     temporaryInbox: {
+        domainLabel: "Email domain",
+        randomDomain: "Random domain",
+        domainHint: "Switching domains keeps the username.",
+        randomDomainHint: "The next address will use a random domain.",
+        newUsername: "New username",
+        updatingAddress: "Updating address…",
+
         "shortName": "Temp Mail",
         "description": "Temporary inbox with online mail history and local copies.",
         "noActiveAddress": "No active address",

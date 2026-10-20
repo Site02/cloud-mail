@@ -1,0 +1,26 @@
+{
+  "acceptance_ids": [
+    "AC-001",
+    "AC-002",
+    "AC-003"
+  ],
+  "document": "/Users/yitianwu/Documents/cloud-mail/docs/changes/mail-domain-choice-2026-10-20.md",
+  "duplicate_sections": [],
+  "empty_sections": [],
+  "errors": [],
+  "evaluated_at": "2026-10-20T08:22:20+00:00",
+  "missing_sections": [],
+  "phase": "closure",
+  "placeholder_sections": [],
+  "present_required_section_count": 20,
+  "required_section_count": 20,
+  "requirement_ids": [
+    "FR-001",
+    "FR-002",
+    "FR-003",
+    "NFR-001"
+  ],
+  "schema_version": 1,
+  "verdict": "PASS",
+  "warnings": []
+}

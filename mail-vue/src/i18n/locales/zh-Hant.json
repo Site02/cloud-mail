@@ -501,7 +501,13 @@
     "registeredAddress": "正式信箱不能在公開頁面查詢",
     "ownDomainOnly": "只能查詢本站域名的地址",
     "invalidAddress": "地址無效，或屬於正式信箱",
-    "copyFailed": "瀏覽器不允許複製，請手動選中"
+    "copyFailed": "瀏覽器不允許複製，請手動選中",
+    "domainLabel": "信箱網域",
+    "randomDomain": "隨機網域",
+    "domainHint": "切換網域會保留使用者名稱。",
+    "randomDomainHint": "下次產生時隨機選擇網域。",
+    "newUsername": "更換使用者名稱",
+    "updatingAddress": "正在更新地址…"
   },
   "languagePreview": "初版翻譯"
 }

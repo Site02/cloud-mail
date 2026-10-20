@@ -2,10 +2,10 @@
   <div class="tm">
     <div class="tm-shell" :inert="Boolean(viewing)">
       <header class="tm-head">
-        <div class="tm-brand">
+        <h1 class="tm-brand">
           <span class="tm-mark"><Icon icon="fluent:mail-24-filled" width="20" height="20" aria-hidden="true"/></span>
           <span>{{ t('temporaryInbox.title') }}</span>
-        </div>
+        </h1>
         <div class="tm-language">
           <LanguageSelect v-model="settingStore.publicMailboxLanguage" />
           <AppInstallButton />
@@ -13,13 +13,7 @@
         </div>
       </header>
 
-      <div class="tm-intro">
-        <h1>{{ t('temporaryInbox.title') }}</h1>
-        <p>{{ t('temporaryInbox.tagline') }}</p>
-      </div>
-
       <div class="tm-grid">
-        <div class="tm-side">
           <section class="tm-card" aria-labelledby="tm-address-title" :aria-busy="creating">
             <h2 id="tm-address-title" class="tm-card-label">{{ t('temporaryInbox.yourAddress') }}</h2>
             <div class="tm-addr">
@@ -28,8 +22,24 @@
               <span v-else-if="creating" class="tm-addr-skeleton" aria-hidden="true"></span>
               <span v-else class="tm-no-address">{{ t('temporaryInbox.noActiveAddress') }}</span>
             </div>
+            <div class="tm-domain-control">
+              <label for="tm-domain">{{ t('temporaryInbox.domainLabel') }}</label>
+              <select id="tm-domain" v-model="domainChoice" :disabled="creating || !domains.length"
+                      dir="ltr" aria-describedby="tm-domain-hint" @change="changeDomain">
+                <option v-if="domainChoice && domainChoice !== RANDOM_DOMAIN && !domains.includes(domainChoice)" :value="domainChoice" disabled>@{{ domainChoice }}</option>
+                <option v-for="domain in domains" :key="domain" :value="domain">@{{ domain }}</option>
+                <option :value="RANDOM_DOMAIN">{{ t('temporaryInbox.randomDomain') }}</option>
+              </select>
+              <button v-if="domainsError" type="button" class="tm-btn tm-domain-retry" @click="fetchDomains(true)">{{ t('pwa.retry') }}</button>
+              <p id="tm-domain-hint" class="tm-domain-hint">{{ t(domainChoice === RANDOM_DOMAIN ? 'temporaryInbox.randomDomainHint' : 'temporaryInbox.domainHint') }}</p>
+            </div>
+            <button v-if="address" type="button" class="tm-btn tm-new-username" :disabled="creating || !isOnline || !domains.length" @click="genAddr">
+              <Icon icon="fluent:arrow-sync-24-regular" width="18" height="18" aria-hidden="true"/>
+              {{ t(creating ? 'temporaryInbox.updatingAddress' : 'temporaryInbox.newUsername') }}
+            </button>
+            <p v-if="addressError" class="tm-address-error" role="alert">{{ t(addressError) }}</p>
             <div class="tm-actions">
-              <button v-if="!address" type="button" class="tm-btn tm-btn-primary" :disabled="creating || !isOnline" @click="genAddr">
+              <button v-if="!address" type="button" class="tm-btn tm-btn-primary" :disabled="creating || !isOnline || !domains.length" @click="genAddr">
                 <Icon icon="mingcute:add-line" width="18" height="18" aria-hidden="true"/>
                 {{ t('temporaryInbox.createAddress') }}
               </button>
@@ -38,45 +48,10 @@
                 {{ copied ? t('temporaryInbox.copied') : t('temporaryInbox.copyAddress') }}
               </button>
               <button v-if="address" type="button" class="tm-btn" @click="copyAccessLink">{{ t('temporaryInbox.copyLink') }}</button>
-              <button v-if="address" type="button" class="tm-btn" :disabled="creating || !isOnline" @click="genAddr">
-                {{ t('temporaryInbox.newAddress') }}
-              </button>
+
             </div>
             <p class="tm-access-note">{{ t('temporaryInbox.accessNote') }}</p>
           </section>
-
-          <form class="tm-manual" @submit.prevent="useManual">
-            <label for="tm-manual-address">{{ t('temporaryInbox.searchPlaceholder') }}</label>
-            <div class="tm-manual-row">
-              <input id="tm-manual-address" v-model="manual" type="email" :placeholder="t('temporaryInbox.searchPlaceholder')"
-                     spellcheck="false" autocomplete="off" dir="ltr"/>
-              <button type="submit" class="tm-btn">{{ t('temporaryInbox.search') }}</button>
-            </div>
-          </form>
-
-          <section v-if="history.length" class="tm-history" aria-labelledby="tm-history-title">
-            <h2 id="tm-history-title">{{ t('temporaryInbox.switchAddress') }} <span>{{ history.length }}</span></h2>
-            <p class="tm-history-note">{{ t('temporaryInbox.localHistoryNote') }}</p>
-            <div class="tm-history-list">
-              <button v-for="item in history" :key="item.address" type="button"
-                      class="tm-history-item" :class="{'is-active': item.address === address}"
-                      :aria-current="item.address === address ? 'true' : undefined"
-                      @click="switchAddress(item.address)">
-                <Icon :icon="item.address === address ? 'fluent:mail-24-filled' : 'fluent:mail-24-regular'"
-                      width="18" height="18" aria-hidden="true"/>
-                <span class="tm-history-address" dir="ltr">{{ item.address }}</span>
-                <span class="tm-history-count">{{ formatMailboxCount(t, publicLang, 'saved', item.messageCount || 0) }}</span>
-              </button>
-            </div>
-            <button type="button" class="tm-clear" @click="showClearConfirm = true">{{ t('temporaryInbox.clearLocal') }}</button>
-          </section>
-          <div v-else class="tm-history-empty">
-            <span>{{ archiveUnavailable ? t('temporaryInbox.storageUnavailable') : t('temporaryInbox.noLocalHistory') }}</span>
-            <button v-if="address || archiveUnavailable || archiveWarning === 'temporaryInbox.clearFailed'" type="button"
-                    class="tm-clear" @click="showClearConfirm = true">{{ t('temporaryInbox.clearLocal') }}</button>
-          </div>
-          <p v-if="archiveWarning" class="tm-history-warning" role="status">{{ t(archiveWarning) }}</p>
-        </div>
 
         <div class="tm-workspace">
           <section class="tm-inbox" aria-labelledby="tm-inbox-title">
@@ -134,6 +109,40 @@
           </button>
           <p class="tm-foot">{{ t('temporaryInbox.retentionWithArchive') }}</p>
         </div>
+
+          <form class="tm-manual" @submit.prevent="useManual">
+            <label for="tm-manual-address">{{ t('temporaryInbox.searchPlaceholder') }}</label>
+            <div class="tm-manual-row">
+              <input id="tm-manual-address" v-model="manual" type="email" :placeholder="t('temporaryInbox.searchPlaceholder')"
+                     spellcheck="false" autocomplete="off" dir="ltr"/>
+              <button type="submit" class="tm-btn">{{ t('temporaryInbox.search') }}</button>
+            </div>
+          </form>
+
+          <section v-if="history.length" class="tm-history" aria-labelledby="tm-history-title">
+            <h2 id="tm-history-title">{{ t('temporaryInbox.switchAddress') }} <span>{{ history.length }}</span></h2>
+            <p class="tm-history-note">{{ t('temporaryInbox.localHistoryNote') }}</p>
+            <div class="tm-history-list">
+              <button v-for="item in history" :key="item.address" type="button"
+                      class="tm-history-item" :class="{'is-active': item.address === address}"
+                      :aria-current="item.address === address ? 'true' : undefined"
+                      @click="switchAddress(item.address)">
+                <Icon :icon="item.address === address ? 'fluent:mail-24-filled' : 'fluent:mail-24-regular'"
+                      width="18" height="18" aria-hidden="true"/>
+                <span class="tm-history-address" dir="ltr">{{ item.address }}</span>
+                <span class="tm-history-count">{{ formatMailboxCount(t, publicLang, 'saved', item.messageCount || 0) }}</span>
+              </button>
+            </div>
+            <button type="button" class="tm-clear" @click="showClearConfirm = true">{{ t('temporaryInbox.clearLocal') }}</button>
+          </section>
+          <div v-else class="tm-history-empty">
+            <span>{{ archiveUnavailable ? t('temporaryInbox.storageUnavailable') : t('temporaryInbox.noLocalHistory') }}</span>
+            <button v-if="address || archiveUnavailable || archiveWarning === 'temporaryInbox.clearFailed'" type="button"
+                    class="tm-clear" @click="showClearConfirm = true">{{ t('temporaryInbox.clearLocal') }}</button>
+          </div>
+          <p v-if="archiveWarning" class="tm-history-warning" role="status">{{ t(archiveWarning) }}</p>
+
+
       </div>
     </div>
 
@@ -229,6 +238,7 @@
 
 <script setup>
 import {mailFramePolicy} from '@/utils/mail-frame-policy.js'
+import {RANDOM_DOMAIN, DOMAIN_CHOICE_KEY, validDomainChoice, addressAtDomain} from '@/utils/mailbox-domain.js'
 import {needsInlineRecovery} from '@/utils/inline-media.js'
 import {computed, defineOptions, nextTick, onMounted, onUnmounted, ref} from "vue";
 import {Icon} from "@iconify/vue";
@@ -308,6 +318,21 @@ const emptyStateText = computed(() => {
 const copied = ref(false)
 const countdown = ref(REFRESH_SEC)
 const domains = ref([])
+const domainChoice = ref(readDomainChoice())
+const addressError = ref('')
+const domainsError = ref(false)
+let acceptedDomainChoice = domainChoice.value
+let addressOperationId = 0
+
+function readDomainChoice() {
+  try { return localStorage.getItem(DOMAIN_CHOICE_KEY) || '' } catch { return '' }
+}
+
+function acceptDomainChoice(value) {
+  domainChoice.value = value
+  acceptedDomainChoice = value
+  try { localStorage.setItem(DOMAIN_CHOICE_KEY, value) } catch { /* Preference storage is optional. */ }
+}
 
 const viewing = ref(null)
 const viewLoading = ref(false)
@@ -723,8 +748,7 @@ onMounted(async () => {
     if (!document.hidden && Date.now() - lastHistorySync >= 60 * 60 * 1000) void onVisible()
   }, 1000)
 
-  const domainRequest = openDomains().then(result => { domains.value = result || [] })
-    .catch(() => { /* 历史记录仍可离线查看 */ })
+  const domainRequest = fetchDomains()
   try {
     const session = await archive.startSession()
     if (disposed) return
@@ -754,7 +778,7 @@ onMounted(async () => {
 
   const normalized = String(saved || '').trim().toLowerCase()
   if (normalized && history.value.some(item => item.address === normalized)) {
-    await selectAddress(normalized)
+    await selectAddress(normalized, {preserveDomain: !sharedAddress})
     return
   }
   await domainRequest
@@ -765,15 +789,17 @@ onMounted(async () => {
       catch (error) { if (isRejectedPublicAddress(error)) saved = null }
     }
     if (saved) {
-      await selectAddress(normalized)
+      await selectAddress(normalized, {preserveDomain: !sharedAddress})
       return
     }
   }
   if (history.value.length) await selectAddress(history.value[0].address)
+  else if (isOnline.value && domains.value.length) await genAddr()
 })
 
 onUnmounted(() => {
   disposed = true
+  addressOperationId += 1
   if (timer) clearInterval(timer)
   if (copyTimer) clearTimeout(copyTimer)
   window.removeEventListener('keydown', onEsc, true)
@@ -908,8 +934,12 @@ async function loadMoreMails() {
   if (hasMoreLocal.value) await loadMoreLocal()
 }
 
-async function selectAddress(next) {
+async function selectAddress(next, {preserveDomain = false} = {}) {
   if (disposed) return
+  addressOperationId += 1
+  creating.value = false
+  addressError.value = ''
+  if (!preserveDomain || domainChoice.value !== RANDOM_DOMAIN) acceptDomainChoice(next.toLowerCase().split('@')[1])
   const session = archiveSession
   const capturedAt = Date.now()
   const clearRevision = archiveClearRevision
@@ -932,17 +962,78 @@ async function switchAddress(next) {
   await selectAddress(next)
 }
 
-async function genAddr() {
-  if (creating.value) return
+async function fetchDomains(retry = false) {
+  domainsError.value = false
+  try {
+    const result = await openDomains()
+    if (disposed) return
+    domains.value = result || []
+    if (!domains.value.length) throw new Error('No mailbox domains')
+    if (!address.value) acceptDomainChoice(validDomainChoice(domainChoice.value, domains.value))
+    addressError.value = ''
+    if (retry && !address.value && domains.value.length && isOnline.value) await genAddr()
+  } catch {
+    if (disposed) return
+    domainsError.value = true
+    addressError.value = 'reqFailErrorMsg'
+  }
+}
+
+async function changeDomain() {
+  const choice = domainChoice.value
+  const previous = acceptedDomainChoice
+  addressError.value = ''
+  if (choice === RANDOM_DOMAIN) {
+    acceptDomainChoice(choice)
+    return
+  }
+  if (!address.value) {
+    acceptDomainChoice(choice)
+    await genAddr()
+    return
+  }
+  const target = addressAtDomain(address.value, choice, domains.value)
+  if (!target) {
+    domainChoice.value = previous
+    addressError.value = 'temporaryInbox.ownDomainOnly'
+    return
+  }
+  if (target === address.value) { acceptDomainChoice(choice); return }
+  const operation = ++addressOperationId
   creating.value = true
   try {
-    const inbox = await openCreateInbox()
-    if (disposed) return
-    await selectAddress(inbox.address)
-  } catch {
-    flash(t('temporaryInbox.createFailed'))
+    const saved = history.value.some(item => item.address === target)
+    if (!saved) {
+      if (!isOnline.value) throw new Error('offline')
+      await openRecentMails(target)
+    }
+    if (disposed || operation !== addressOperationId) return
+    acceptDomainChoice(choice)
+    await selectAddress(target, {preserveDomain: true})
+  } catch (error) {
+    if (disposed || operation !== addressOperationId) return
+    domainChoice.value = previous
+    addressError.value = !isOnline.value ? 'temporaryInbox.offlineHistoryOnly' : publicLookupErrorKey(error)
   } finally {
-    creating.value = false
+    if (operation === addressOperationId) creating.value = false
+  }
+}
+
+async function genAddr() {
+  if (creating.value || !isOnline.value) return
+  const choice = validDomainChoice(domainChoice.value, domains.value)
+  const operation = ++addressOperationId
+  creating.value = true
+  addressError.value = ''
+  try {
+    const inbox = await openCreateInbox(choice === RANDOM_DOMAIN ? undefined : choice)
+    if (disposed || operation !== addressOperationId) return
+    acceptDomainChoice(choice)
+    await selectAddress(inbox.address, {preserveDomain: true})
+  } catch (error) {
+    if (!disposed && operation === addressOperationId) addressError.value = 'temporaryInbox.createFailed'
+  } finally {
+    if (operation === addressOperationId) creating.value = false
   }
 }
 
@@ -1062,6 +1153,9 @@ async function captureRecentBatch(recent, mailbox) {
 }
 
 async function useManual() {
+  const operation = ++addressOperationId
+  creating.value = false
+  domainChoice.value = acceptedDomainChoice
   const addr = manual.value.trim().toLowerCase()
   if (!addr) return
   if (history.value.some(item => item.address === addr)) {
@@ -1074,8 +1168,12 @@ async function useManual() {
     return
   }
   if (!domains.value.length) {
-    try { domains.value = await openDomains() || [] } catch { /* 查询错误在下面处理 */ }
+    try { domains.value = await openDomains() || [] } catch {
+      if (!disposed && operation === addressOperationId) flash(t('reqFailErrorMsg'))
+      return
+    }
   }
+  if (disposed || operation !== addressOperationId) return
   if (!domains.value.some(d => addr.endsWith('@' + d))) {
     flash(t('temporaryInbox.ownDomainOnly'))
     return
@@ -1083,14 +1181,19 @@ async function useManual() {
   try {
     await openRecentMails(addr)
   } catch (error) {
+    if (disposed || operation !== addressOperationId) return
     flash(t(publicLookupErrorKey(error)))
     return
   }
+  if (disposed || operation !== addressOperationId) return
   await selectAddress(addr)
   manual.value = ''
 }
 
 function resetLocalState() {
+  addressOperationId += 1
+  creating.value = false
+  addressError.value = ''
   closeMail()
   inboxRequestId += 1
   localRequestId += 1
@@ -1202,7 +1305,7 @@ function mailPreview(mail) {
 }
 .tm-shell { max-width: 1160px; margin: 0 auto; }
 .tm-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; min-height: 78px; }
-.tm-brand { display: inline-flex; align-items: center; gap: 11px; font-size: 18px; font-weight: 750; letter-spacing: -.035em; }
+.tm-brand { margin: 0; display: inline-flex; align-items: center; gap: 11px; font-size: 18px; font-weight: 750; letter-spacing: -.035em; }
 .tm-mark { display: inline-grid; place-items: center; flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px; color: #fff; background: var(--accent); }
 .tm-language { display: flex; align-items: center; gap: 8px; min-width: 0; --language-control-border: var(--line); --language-control-bg: var(--card); --language-control-text: var(--ink); }
 .tm-nav-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 9px 13px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: var(--card); font-size: 13px; text-decoration: none; white-space: nowrap; }
@@ -1210,7 +1313,12 @@ function mailPreview(mail) {
 .tm-intro { margin: 27px 0 26px; }
 .tm-intro h1 { margin: 0 0 8px; font-size: clamp(26px, 3vw, 32px); line-height: 1.15; letter-spacing: -.045em; }
 .tm-intro p { max-width: 650px; margin: 0; color: var(--ink-2); font-size: 15px; line-height: 1.55; }
-.tm-grid { display: grid; grid-template-columns: minmax(300px, 370px) minmax(0, 1fr); align-items: start; gap: 20px; }
+.tm-grid { margin-top: 16px; display: grid; grid-template-columns: minmax(300px, 370px) minmax(0, 1fr); grid-template-areas: "address inbox" "manual inbox" "history inbox" "warning inbox"; grid-template-rows: auto auto auto 1fr; align-items: start; gap: 16px 20px; }
+.tm-card { grid-area: address; }
+.tm-workspace { grid-area: inbox; }
+.tm-manual { grid-area: manual; }
+.tm-history, .tm-history-empty { grid-area: history; }
+.tm-history-warning { grid-area: warning; }
 .tm-side, .tm-workspace { min-width: 0; }
 .tm-card, .tm-manual, .tm-history, .tm-inbox { border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
 .tm-card { padding: 22px; }
@@ -1220,33 +1328,40 @@ function mailPreview(mail) {
 .tm-address-copy:hover { border-color: var(--accent); }
 .tm-addr-skeleton { display: block; width: 70%; height: 46px; border-radius: 8px; background: var(--card-2); animation: tm-shimmer 1.3s ease-in-out infinite alternate; }
 .tm-no-address { display: block; padding-top: 8px; color: var(--ink); font-size: 20px; font-weight: 700; }
-.tm-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.tm-domain-control label { display: block; margin-bottom: 7px; font-size: 13px; font-weight: 650; }
+.tm-domain-control select { width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid var(--ink-2); border-radius: 9px; color: var(--ink); background: var(--card); font: 600 15px var(--mono); cursor: pointer; }
+.tm-domain-control select:disabled { color: var(--ink-2); cursor: wait; }
+.tm-domain-hint { margin: 7px 0 12px; color: var(--ink-2); font-size: 12px; line-height: 1.5; }
+.tm-new-username { width: 100%; }
+.tm-address-error { margin: 10px 0; color: var(--ui-danger, #b42332); font-size: 13px; line-height: 1.5; }
+.tm-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.tm-actions > .tm-btn { flex: 1 1 120px; }
 .tm-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 9px 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--card); color: var(--ink); font-family: inherit; font-size: 13px; font-weight: 650; line-height: 1.3; text-align: center; cursor: pointer; }
 .tm-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .tm-btn:disabled { opacity: .5; cursor: not-allowed; }
 .tm-btn-primary { color: #fff; background: var(--accent); border-color: var(--accent); }
 .tm-btn-primary:hover:not(:disabled) { color: #fff; filter: brightness(.93); }
 .tm-access-note { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--line); color: var(--ink-2); font-size: 12px; line-height: 1.6; }
-.tm-manual { display: grid; gap: 9px; margin-top: 16px; padding: 18px; }
+.tm-manual { display: grid; gap: 9px; margin-top: 0; padding: 18px; }
 .tm-manual label { color: var(--ink); font-size: 13px; font-weight: 700; }
 .tm-manual-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .tm-manual input { min-width: 0; width: 100%; min-height: 44px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; outline: none; background: var(--card); color: var(--ink); font: inherit; font-size: 13px; }
 .tm-manual input::placeholder { color: var(--ink-2); }
 .tm-manual input:focus-visible { border-color: var(--accent); }
-.tm-history { margin-top: 16px; padding: 16px 18px; }
+.tm-history { margin-top: 0; padding: 16px 18px; }
 .tm-history h2 { margin: 0; color: var(--ink); font-size: 14px; font-weight: 700; }
 .tm-history h2 span { margin-inline-start: 4px; color: var(--ink-2); font-weight: 500; }
 .tm-history-note { margin: 10px 0 0; color: var(--ink-2); font-size: 12px; line-height: 1.55; }
 .tm-history-list { display: grid; grid-template-columns: minmax(0, 1fr); max-height: 240px; overflow-y: auto; margin-top: 12px; }
 .tm-history-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; min-height: 48px; width: 100%; padding: 10px 8px; border: 0; border-top: 1px solid var(--line); color: var(--ink); background: transparent; text-align: start; cursor: pointer; }
 .tm-history-item:hover { color: var(--accent); background: var(--card-2); }
-.tm-history-item.is-active { color: var(--accent); background: var(--card-2); font-weight: 700; }
+.tm-history-item.is-active { color: var(--focus); background: var(--card-2); font-weight: 700; }
 .tm-history-item svg { flex: 0 0 auto; }
-.tm-history-address { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px var(--mono); }
+.tm-history-address { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; white-space: normal; font: 12px/1.5 var(--mono); }
 .tm-history-count { flex: 0 0 auto; max-width: 45%; overflow-wrap: anywhere; color: var(--ink-2); font-size: 11px; text-align: end; }
 .tm-clear { display: inline-flex; min-height: 36px; align-items: center; padding: 7px 0; border: 0; background: transparent; color: var(--ui-danger, #b42332); font-size: 12px; font-weight: 650; cursor: pointer; }
 .tm-clear:hover { text-decoration: underline; }
-.tm-history-empty { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 16px; color: var(--ink-2); font-size: 12px; }
+.tm-history-empty { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 0; color: var(--ink-2); font-size: 12px; }
 .tm-history-warning { margin: 10px 0 0; color: var(--ui-danger, #b42332); font-size: 12px; line-height: 1.5; }
 .tm-inbox { min-height: 380px; overflow: hidden; }
 .tm-inbox-head { display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 12px; padding: 19px 22px 15px; border-bottom: 1px solid var(--line); }
@@ -1274,7 +1389,7 @@ function mailPreview(mail) {
 .tm-mail-local { margin-top: 5px; color: var(--good); font-size: 11px; }
 .tm-mail-side { display: flex; align-items: flex-end; flex-direction: column; gap: 12px; }
 .tm-mail-time { color: var(--ink-2); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.tm-code { position: relative; z-index: 2; min-height: 44px; padding: 6px 10px; border: 1px solid var(--accent); border-radius: 8px; color: var(--accent); background: var(--card); font: 700 15px var(--mono); letter-spacing: .05em; cursor: pointer; }
+.tm-code { position: relative; z-index: 2; min-height: 44px; padding: 6px 10px; border: 1px solid var(--focus); border-radius: 8px; color: var(--focus); background: var(--card); font: 700 15px var(--mono); letter-spacing: .05em; cursor: pointer; }
 .tm-code:hover { background: var(--card-2); }
 .tm-empty { display: grid; justify-items: center; align-content: center; min-height: 290px; padding: 42px 22px; text-align: center; }
 .tm-empty-icon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 14px; border-radius: 12px; color: var(--accent); background: var(--card-2); }
@@ -1284,7 +1399,7 @@ function mailPreview(mail) {
 .tm-foot { margin: 18px 0 0; color: var(--ink-2); font-size: 12px; line-height: 1.55; }
 .tm-fade-enter-active { transition: opacity .18s ease, transform .18s ease; }
 .tm-fade-enter-from { opacity: 0; transform: translateY(-5px); }
-.tm :is(button, input, summary, a):focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.tm :is(button, input, select, summary, a):focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 @keyframes tm-blink { 50% { opacity: .25; } }
 @keyframes tm-shimmer { to { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .tm-pulse.is-busy, .tm-addr-skeleton, .tm-fade-enter-active { animation: none; transition: none; } }
@@ -1542,13 +1657,13 @@ button.tm-attachment-file {
 .tm-view-code { flex-wrap: wrap; }
 
 @media (max-width: 900px) {
-  .tm-grid { grid-template-columns: minmax(0, 1fr); }
+  .tm-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "address" "inbox" "manual" "history" "warning"; grid-template-rows: auto; }
   .tm-side { display: contents; }
   .tm-card { order: 1; }
-  .tm-manual { order: 2; margin-top: -4px; }
-  .tm-history, .tm-history-empty { order: 3; margin-top: -4px; }
-  .tm-history-warning { order: 4; margin-top: -14px; }
-  .tm-workspace { order: 5; }
+  .tm-manual { order: 3; margin-top: 0; }
+  .tm-history, .tm-history-empty { order: 4; margin-top: 0; }
+  .tm-history-warning { order: 5; margin-top: 0; }
+  .tm-workspace { order: 2; }
 }
 
 @media (max-width: 560px) {

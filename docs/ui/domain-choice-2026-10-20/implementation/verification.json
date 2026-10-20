@@ -1,0 +1,44 @@
+{
+  "changeId": "MAIL-DOMAIN-CHOICE-20261020",
+  "status": "PASS_WITH_STATED_SCOPE",
+  "productSourceArchiveSha256": "8080bb6efc9b195e4937d0c53ee6b5a31a77855c06c7e748c6a7c9dbfe3c68ce",
+  "finalBrowserRunnerSha256": "2348a4a9cc06357222939730eee6abc92189c0cf7c34491775d40b2e41718307",
+  "firstWindowsJob": "job-4710e996276f4342992296f4c4d8f67d",
+  "finalExecution": "Mac arm64, Node 24.19.0; shared heavy slot",
+  "unitTests": {
+    "server": 55,
+    "serverLanguages": 8,
+    "application": 49,
+    "failed": 0
+  },
+  "domainBrowserMatrix": 6,
+  "mailBrowserMatrix": 4,
+  "productionVersion": "f6ec2fce-5531-40d5-9843-500aa72f2010",
+  "productionEntry": "/assets/index-C_tf-WZI.js",
+  "productionChecks": [
+    "selected domain preserves local part",
+    "new local part preserves domain",
+    "reload preserves current address and preference",
+    "history switches complete address and domain",
+    "existing history retained",
+    "three explicit domains and legacy null request succeed",
+    "unsupported domain returns business error 400"
+  ],
+  "scopeLimits": [
+    "controlled browser mail fixtures, not real SMTP",
+    "no whole-site theme certification",
+    "Windows Hindi glyphs not accepted; final Mac Hindi screenshot readable"
+  ],
+  "sourceNote": "Only the browser harness changed after product build to wait for full mail opacity and remove hover before screenshots; product bytes unchanged.",
+  "bundleSha256": "db6d4e5a36f62f65a90bdeac45aebe0dc881e611919e0a2a25c0cd8cd67e7556",
+  "entrySha256": "5609cf6fec9d802718a647dfd0982977ebdcaee57d464f72570a81d5a7f28995",
+  "executionLogHashes": {
+    "domain-choice.log": "464e7ccf42412677e06e554cfb20797182101bd4ce4eb8c8704f7190814d3900",
+    "bundle.log": "39157d37afa22d2746b8324a0cd02a7915823c41ccf0bbcfa0be9397c90e7bbd",
+    "runtime.log": "77acfd00895db773b7e8fdbe3e798ce11089530d149e1b75189c184f0584ccda",
+    "mail-flows.log": "28ecfc67e9835cc19ffbc1583ca5d3b8369bfad89dba36aa8713bf35503f7d25",
+    "app.log": "13f2320b7638a57dc7209216ae6f237c87f39c2d18f73348d508170f1c099ae0",
+    "server.log": "69d8dbc5ad8a2b591982466338a49ba005d887b50fcbd7289dfaba6939f5bff8",
+    "build.log": "c872987c51fe420a8c5e1d502462f79ba6c54a3e24585da6e21035af18eeb336"
+  }
+}

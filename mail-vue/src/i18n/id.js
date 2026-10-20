@@ -439,6 +439,13 @@ const id = {
         "retry": "Coba lagi"
     },
     "temporaryInbox": {
+        domainLabel: "Domain email",
+        randomDomain: "Domain acak",
+        domainHint: "Mengganti domain tidak mengubah nama pengguna.",
+        randomDomainHint: "Alamat berikutnya akan menggunakan domain acak.",
+        newUsername: "Nama pengguna baru",
+        updatingAddress: "Memperbarui alamat…",
+
         "shortName": "Email Sementara",
         "description": "Kotak masuk sementara untuk email terbaru dan kode verifikasi, dengan salinan tersimpan di perangkat.",
         "noActiveAddress": "Tidak ada alamat aktif",

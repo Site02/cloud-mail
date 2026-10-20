@@ -1,0 +1,71 @@
+[
+  {
+    "width": 1440,
+    "lang": "zh",
+    "dark": false,
+    "body": true,
+    "image": true,
+    "externalImage": true,
+    "scriptsBlocked": true,
+    "attachment": true,
+    "replyImage": true,
+    "forwardImageAndAttachment": true,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "width": 375,
+    "lang": "en",
+    "dark": false,
+    "body": true,
+    "image": true,
+    "externalImage": true,
+    "scriptsBlocked": true,
+    "attachment": true,
+    "replyImage": true,
+    "forwardImageAndAttachment": true,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "width": 768,
+    "lang": "de",
+    "dark": true,
+    "body": true,
+    "image": true,
+    "externalImage": true,
+    "scriptsBlocked": true,
+    "attachment": true,
+    "replyImage": true,
+    "forwardImageAndAttachment": true,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "width": 320,
+    "lang": "ar",
+    "dark": true,
+    "body": true,
+    "image": true,
+    "externalImage": true,
+    "scriptsBlocked": true,
+    "attachment": true,
+    "replyImage": true,
+    "forwardImageAndAttachment": true,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "http403Recovery": true,
+    "noAutomaticReload": true,
+    "noBogusAttachment": true,
+    "emptyDetailRecovery": true
+  },
+  {
+    "publicCacheRecovery": true,
+    "publicExternalImage": true,
+    "addressIsolation": true,
+    "offlineImage": true,
+    "errors": []
+  }
+]

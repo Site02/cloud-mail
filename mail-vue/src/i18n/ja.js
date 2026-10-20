@@ -405,6 +405,13 @@ const ja = {
         "retry": "再試行"
     },
     "temporaryInbox": {
+        domainLabel: "メールドメイン",
+        randomDomain: "ランダムなドメイン",
+        domainHint: "ドメインを変更してもユーザー名は変わりません。",
+        randomDomainHint: "次のアドレスはランダムなドメインで生成されます。",
+        newUsername: "ユーザー名を変更",
+        updatingAddress: "アドレスを更新中…",
+
         "shortName": "一時メール",
         "description": "最近のメールと確認コードを受け取り、端末にコピーを保存できる一時受信箱。",
         "noActiveAddress": "使用中のアドレスはありません",

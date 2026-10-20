@@ -439,6 +439,13 @@ const zh = {
         retry: '重试',
     },
     temporaryInbox: {
+        domainLabel: "邮箱域名",
+        randomDomain: "随机域名",
+        domainHint: "切换域名会保留用户名。",
+        randomDomainHint: "下次生成时随机选择域名。",
+        newUsername: "更换用户名",
+        updatingAddress: "正在更新地址…",
+
         "shortName": "临时邮箱",
         "description": "临时收件箱，可查看服务器上的历史邮件并保存本机副本。",
         "noActiveAddress": "当前没有地址",

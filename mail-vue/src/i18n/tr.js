@@ -439,6 +439,13 @@ const tr = {
     "retry": "Tekrar dene"
   },
   "temporaryInbox": {
+        domainLabel: "E-posta alan adı",
+        randomDomain: "Rastgele alan adı",
+        domainHint: "Alan adı değiştiğinde kullanıcı adı korunur.",
+        randomDomainHint: "Sonraki adres rastgele bir alan adı kullanır.",
+        newUsername: "Yeni kullanıcı adı",
+        updatingAddress: "Adres güncelleniyor…",
+
     "shortName": "Geçici Posta",
     "description": "Son e-postalar ve doğrulama kodları için geçici gelen kutusu; kopyalar cihazda saklanır.",
     "noActiveAddress": "Aktif adres yok",
