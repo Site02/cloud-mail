@@ -37,7 +37,7 @@ run_worker_first = true
 crons = ["0 * * * *"]
 
 [vars]
-domain = ["okkmail.cc"]
+domain = ["okkmail.cc", "qtmail.click", "qtgmail.click"]
 admin = "admin@okkmail.cc"
 
 [secrets]

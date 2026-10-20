@@ -88,6 +88,20 @@ describe('public attachments', () => {
     expect((await response.json()).data.map(row => row.emailId)).toEqual([2, 1]);
   });
 
+  it('generates addresses across every configured temporary-mail domain', async () => {
+    context.domain = ['okkmail.cc', 'qtmail.click', 'qtgmail.click'];
+    const random = vi.spyOn(Math, 'random');
+    try {
+      for (const [index, sample] of [0, 0.4, 0.9].entries()) {
+        random.mockReturnValue(sample);
+        const response = await app.request('http://localhost/open/inbox', {method: 'POST'}, context);
+        const body = await response.json();
+        expect(body.data.address.split('@')[1]).toBe(context.domain[index]);
+        expect(await request('/open/recentMails?address=' + encodeURIComponent(body.data.address)).then(r => r.json()).then(r => r.code)).toBe(200);
+      }
+    } finally { random.mockRestore(); }
+  });
+
   it('issues a random public inbox address', async () => {
     const response = await app.request('http://localhost/open/inbox', {method: 'POST'}, context);
     const { data } = await response.json();

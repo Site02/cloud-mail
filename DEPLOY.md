@@ -13,7 +13,7 @@
 zone 级 catch-all → 这个 Worker。
 
 **catch-all 是 zone 级的，子域没有独立 catch-all。** 所以 `temp.okkmail.cc` 只是入口别名，
-不产生地址；公开页生成的地址仍然是 `xxx@okkmail.cc`。
+不产生地址；公开页生成的地址使用已接入的收信域名：`okkmail.cc`、`qtmail.click`、`qtgmail.click`。每个域名独立配置收信 DNS 和全收路由，网页入口仍共用 `temp.okkmail.cc`。
 
 ## 部署
 
@@ -132,3 +132,9 @@ curl -X POST -H "X-Init-Key: <init_secret>" "https://box.okkmail.cc/api/init"
 回复或转发相关修改须覆盖引用图片、普通附件及草稿变更确认。复用图片查询发布前确认生产存在 `idx_attachments_key_type`，并核对实际查询计划与读行数。真实账号验收见 [检查记录](docs/ui/mail-authenticated-review-2026-10-08.md)。
 
 图片验收必须同时覆盖历史邮件的外部HTTPS图片与内嵌附件图片，并分别验证个人邮箱、全部邮件和临时邮箱。以图片成功解码为准，不能只检查正文有图片标签。两个阅读入口共用正文加载规则；脚本、嵌套页面、表单及同源访问仍须隔离。
+
+## 新增临时邮箱域名
+
+每次新增域名，先在现有账户建立DNS区域，在注册商保存分配的名称服务器。区域激活后，在邮件路由设置中添加服务要求的MX、SPF及DKIM记录，将全收规则设为“发送到 Worker / cloudmail”并启用。公共DNS和路由状态确认后，才加入 `wrangler.toml` 的 `domain` 数组并部署。
+
+公开页面读取 `/api/open/domains` 校验地址；“换一个”从已配置域名随机生成新地址。仅修改DNS不会更新应用的地址校验；仅修改域名数组也不能建立收信路由。新域名默认只接收邮件，发信需另行验证发信供应商配置。本次接入记录见 [域名接入](docs/changes/mail-domains-2026-10-19.md)。
