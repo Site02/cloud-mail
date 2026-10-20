@@ -5,18 +5,18 @@
       <div class="item">
         <div>{{$t('username')}}</div>
         <div>
-          <span v-if="setNameShow" class="edit-name-input">
-            <el-input v-model="accountName"  ></el-input>
-            <span class="edit-name" @click="setName">
+          <Transition :css="false" @enter="editMotion.enter" @leave="editMotion.leave" @enter-cancelled="editMotion.cancel"><span v-if="setNameShow" class="edit-name-input">
+            <el-input v-model="accountName" :aria-label="$t('username')"></el-input>
+            <button class="edit-name letter-button" @click="setName">
              {{$t('save')}}
-            </span>
+            </button>
           </span>
           <span v-else class="user-name">
             <span >{{ userStore.user.name }}</span>
-            <span class="edit-name" @click="showSetName">
+            <button class="edit-name letter-button" @click="showSetName">
              {{$t('change')}}
-            </span>
-          </span>
+            </button>
+          </span></Transition>
         </div>
       </div>
       <div class="item">
@@ -30,11 +30,13 @@
         </div>
       </div>
     </div>
+    <section class="letter-settings-appearance"><AppearancePicker inline /></section>
     <div class="language">
       <div class="title">{{$t('language')}}</div>
       <el-select
           :model-value="langSelect"
           class="language-select"
+          :aria-label="$t('language')"
           placeholder="Select"
           @change="changeLang"
       >
@@ -52,15 +54,17 @@
       </div>
     </div>
     <el-dialog v-model="pwdShow" :title="$t('changePassword')" width="340">
-      <div class="update-pwd">
-        <el-input type="password" :placeholder="$t('newPassword')" v-model="form.password" autocomplete="off" @keyup.enter="submitPwd"/>
-        <el-input type="password" :placeholder="$t('confirmPassword')" v-model="form.newPwd" autocomplete="off" @keyup.enter="submitPwd"/>
-        <el-button type="primary" :loading="setPwdLoading" @click="submitPwd">{{$t('save')}}</el-button>
+      <div class="letter-dialog-form">
+        <el-input type="password" :aria-label="$t('newPassword')" :placeholder="$t('newPassword')" v-model="form.password" autocomplete="off" @keyup.enter="submitPwd"/>
+        <el-input type="password" :aria-label="$t('confirmPassword')" :placeholder="$t('confirmPassword')" v-model="form.newPwd" autocomplete="off" @keyup.enter="submitPwd"/>
+        <el-button class="letter-dialog-action" type="primary" :loading="setPwdLoading" @click="submitPwd">{{$t('save')}}</el-button>
       </div>
     </el-dialog>
   </div>
 </template>
 <script setup>
+import AppearancePicker from "@/components/appearance-picker.vue"
+import {useLetterMotion} from "@/theme/motion.js"
 import {reactive, ref, defineOptions} from 'vue'
 import {resetPassword, userDelete} from "@/request/my.js";
 import {useUserStore} from "@/store/user.js";
@@ -71,6 +75,10 @@ import {useI18n} from "vue-i18n";
 import {useSettingStore} from "@/store/setting.js";
 
 const { t } = useI18n()
+const editMotion=useLetterMotion({meta:{name:"setting"}}, {
+  duration:el=>el.matches('.edit-name-input') ? 200 : 180,
+  focusTarget:el=>el.querySelector('input,button')
+})
 const accountStore = useAccountStore()
 const settingStore = useSettingStore()
 const userStore = useUserStore();
@@ -215,12 +223,6 @@ function submitPwd() {
     padding: 30px 30px;
   }
 
-  .update-pwd {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-  }
-
   .title {
     font-size: 18px;
     font-weight: bold;
@@ -296,3 +298,5 @@ function submitPwd() {
   }
 }
 </style>
+
+<style scoped>.letter-settings-appearance{padding:24px 30px;border-bottom:1px solid var(--letter-line);max-width:960px}</style>

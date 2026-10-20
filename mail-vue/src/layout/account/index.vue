@@ -1,27 +1,27 @@
 <template>
   <div class="account-box">
     <div class="head-opt">
-      <Icon v-perm="'account:add'" class="icon add" icon="ion:add-outline" width="23" height="23" @click="add"/>
-      <Icon class="icon refresh" icon="ion:reload" width="18" height="18" @click="refresh"/>
+      <button v-perm="'account:add'" class="letter-button" @click="add"><LetterIcon name="plus" />{{ $t("addAccount") }}</button>
+      <button class="letter-button" @click="refresh" :disabled="loading"><LetterIcon name="refresh" />{{ $t("letter.refresh") }}</button>
     </div>
     <el-scrollbar class="scrollbar" ref="scrollbarRef">
       <div v-infinite-scroll="getAccountList" :infinite-scroll-distance="600" :infinite-scroll-immediate="false">
-        <el-card class="item" :class="itemBg(item.accountId)" v-for="(item, index) in accounts" :key="item.accountId"
-                 @click="changeAccount(item)">
-          <div class="account">
-            {{ item.email }}
-          </div>
+        <div class="item" :class="itemBg(item.accountId)" v-for="(item, index) in accounts" :key="item.accountId"
+                 >
+          <button class="account letter-account-choice" @click="changeAccount(item)" :aria-pressed="accountStore.currentAccountId===item.accountId">
+            <span class="letter-identity">{{ (item.name || item.email)[0]?.toUpperCase() }}</span>
+            <span><strong>{{ item.name || item.email.split('@')[0] }}</strong><small>{{ item.email }}</small></span>
+            <span class="current-address" v-if="accountStore.currentAccountId===item.accountId"><LetterIcon name="check" />{{ $t('letter.current') }}</span>
+          </button>
           <div class="opt">
             <div class="send-email" @click.stop>
-              <Icon @click="setAllReceive(item)" v-if="!item.allReceive" icon="eva:email-fill" width="22" height="22" color="#fccb1a"/>
-              <Icon @click="setAllReceive(item)" v-else icon="flat-color-icons:folder" width="22" height="22" color="#23c4f1" />
+              <button class="letter-button catch-all-toggle" @click="setAllReceive(item)" :aria-pressed="!!item.allReceive" :title="item.allReceive ? $t('letter.allReceive') : $t('letter.singleReceive')"><LetterIcon name="mail" /><span>{{ item.allReceive ? $t('letter.allReceive') : $t('letter.singleReceive') }}</span></button>
             </div>
             <div class="settings" @click.stop>
-              <Icon icon="fluent-color:clipboard-24" width="22" height="22" @click.stop="copyAccount(item.email)"/>
-              <Icon icon="fluent:settings-24-filled" width="21" height="21" color="#909399"
-                    v-if="showNullSetting(item)"/>
-              <el-dropdown v-else>
-                <Icon icon="fluent:settings-24-filled" width="21" height="21" color="#909399"/>
+              <button class="letter-button letter-icon-button" @click.stop="copyAccount(item.email)" :aria-label="$t('copy')"><LetterIcon name="copy" /></button>
+              <button class="letter-button letter-icon-button" disabled :aria-label="$t('settings')" v-if="showNullSetting(item)"><LetterIcon name="more" /></button>
+              <el-dropdown v-else trigger="click">
+                <button class="letter-button letter-icon-button" :aria-label="$t('letter.more')"><LetterIcon name="more" /></button>
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item v-if="hasPerm('email:send')" @click="openSetName(item)">{{ $t('rename') }}</el-dropdown-item>
@@ -34,7 +34,7 @@
               </el-dropdown>
             </div>
           </div>
-        </el-card>
+        </div>
 
         <!-- Initial Loading Skeleton -->
         <template v-if="loading">
@@ -75,16 +75,18 @@
       </div>
 
     </el-scrollbar>
-    <el-dialog v-model="showAdd" :title="$t('addAccount')">
-      <div class="container">
-        <el-input v-model="addForm.email" ref="addRef" type="text" :placeholder="$t('emailAccount')" autocomplete="off" @keyup.enter="submit">
+    <el-dialog append-to-body v-model="showAdd" :title="$t('addAccount')" width="400">
+      <div class="letter-dialog-form">
+        <div class="letter-dialog-field">
+        <label class="letter-dialog-label" for="letter-address-prefix">{{ $t('emailAccount') }}</label>
+        <el-input id="letter-address-prefix" v-model="addForm.email" ref="addRef" type="text" :aria-label="$t('emailAccount')" :placeholder="$t('emailAccount')" autocomplete="off" @keyup.enter="submit" class="letter-address-input">
           <template #append>
-            <div @click.stop="openSelect">
               <el-select
                   ref="mySelect"
                   v-model="addForm.suffix"
                   :placeholder="$t('select')"
-                  class="select"
+                  :aria-label="$t('domain')"
+                  class="letter-address-domain"
               >
                 <el-option
                     v-for="item in domainList"
@@ -93,17 +95,12 @@
                     :value="item"
                 />
               </el-select>
-              <div>
-                <span>{{ addForm.suffix }}</span>
-                <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
-              </div>
-            </div>
           </template>
         </el-input>
-        <el-button class="btn" type="primary" @click="submit" :loading="addLoading"
+        </div>
+        <el-button class="letter-dialog-action" type="primary" @click="submit" :loading="addLoading"
         >{{ $t('add') }}
         </el-button>
-      </div>
       <div
           class="add-email-turnstile"
           :class="verifyShow ? 'turnstile-show' : 'turnstile-hide'"
@@ -111,14 +108,18 @@
           data-callback="onTurnstileSuccess"
           data-error-callback="onTurnstileError"
       >
-        <span style="font-size: 12px;color: #F56C6C" v-if="botJsError">{{ $t('verifyModuleFailed') }}</span>
+        <span class="letter-form-error" role="alert" v-if="botJsError">{{ $t('verifyModuleFailed') }}</span>
+      </div>
       </div>
     </el-dialog>
-    <el-dialog v-model="setNameShow" :title="$t('changeUserName')">
-      <div class="container">
-        <el-input v-model="accountName" type="text" :placeholder="$t('username')" autocomplete="off" @keyup.enter="setName">
+    <el-dialog append-to-body v-model="setNameShow" :title="$t('changeUserName')" width="400">
+      <div class="letter-dialog-form">
+        <div class="letter-dialog-field">
+        <label class="letter-dialog-label" for="letter-account-name">{{ $t('username') }}</label>
+        <el-input id="letter-account-name" v-model="accountName" type="text" :placeholder="$t('username')" autocomplete="off" @keyup.enter="setName">
         </el-input>
-        <el-button class="btn" type="primary" @click="setName" :loading="setNameLoading"
+        </div>
+        <el-button class="letter-dialog-action" type="primary" @click="setName" :loading="setNameLoading"
         >{{ $t('save') }}
         </el-button>
       </div>
@@ -126,7 +127,9 @@
   </div>
 </template>
 <script setup>
-import {Icon} from "@iconify/vue";
+
+import LetterIcon from "@/components/letter-icon.vue"
+import {useUiStore} from "@/store/ui.js"
 import {computed, nextTick, reactive, ref, watch} from "vue";
 import {
   accountList,
@@ -147,6 +150,7 @@ import {useI18n} from "vue-i18n";
 import {AccountAllReceiveEnum} from "@/enums/account-enum.js";
 
 const {t} = useI18n();
+const uiStore=useUiStore();
 const userStore = useUserStore();
 const accountStore = useAccountStore();
 const settingStore = useSettingStore();
@@ -343,6 +347,7 @@ function refresh() {
 function changeAccount(account) {
   accountStore.currentAccountId = account.accountId
   accountStore.currentAccount = account
+  uiStore.accountShow = false
 }
 
 function add() {
@@ -576,11 +581,6 @@ path[fill="#ffdda1"] {
     }
   }
 
-  .btn {
-    width: 100%;
-    margin-top: 15px;
-  }
-
   .item {
     background-color: var(--el-bg-color);
     border-radius: 8px;
@@ -632,41 +632,13 @@ path[fill="#ffdda1"] {
 }
 
 
-.setting-icon {
-  position: relative;
-  top: 6px;
-}
-
-:deep(.el-input-group__append) {
-  padding: 0 !important;
-  padding-left: 8px !important;
-  background: var(--el-bg-color);
-}
-
-:deep(.el-dialog) {
-  width: 400px !important;
-  @media (max-width: 440px) {
-    width: calc(100% - 40px) !important;
-    margin-right: 20px !important;
-    margin-left: 20px !important;
-  }
-}
-
-.select {
-  position: absolute;
-  right: 30px;
-  width: 100px;
-  opacity: 0;
-  pointer-events: none;
-}
+.letter-address-input :deep(.el-input-group__append) { padding: 0; box-shadow: none; background: var(--letter-surface-paper); }
+.letter-address-domain { width: 170px; max-width: 48vw; margin: 0; }
+.letter-address-domain :deep(.el-select__wrapper) { min-height: 40px; border-radius: 0 var(--el-input-border-radius) var(--el-input-border-radius) 0; }
 
 :deep(.el-pagination .el-select) {
   width: 100px;
   background: var(--el-bg-color);
-}
-
-.add-email-turnstile {
-  margin-top: 15px;
 }
 
 .turnstile-show {
@@ -679,4 +651,18 @@ path[fill="#ffdda1"] {
   position: fixed;
 }
 
+</style>
+
+<style scoped>
+.account-box{border:0!important;background:transparent;height:100%}
+.account-box .head-opt{height:52px;padding:0 0 12px;justify-content:space-between;border-bottom:1px solid var(--letter-line);box-shadow:none}
+.account-box .scrollbar{height:calc(100% - 52px)}
+.account-box .item{margin:0;padding:16px 10px;border:0;border-radius:0;border-bottom:1px solid var(--letter-line);box-shadow:none;background:transparent;cursor:default}
+.account-box .item:first-child{margin-top:0}
+.account-box .item-choose{background:var(--letter-surface-selected);border-left:3px solid var(--letter-accent)}
+.account-box .item .account{display:flex;align-items:center;gap:12px;margin-bottom:8px;text-align:left;width:100%;white-space:normal;font-size:14px}
+.letter-account-choice > span:nth-child(2){min-width:0;flex:1}.letter-account-choice strong{display:block;font-weight:600}.letter-account-choice small{display:block;margin-top:3px;color:var(--letter-muted);overflow-wrap:anywhere;font-size:12px}
+.current-address{display:flex;align-items:center;gap:3px;color:var(--letter-selected-ink);font-size:11px}.current-address .letter-icon{width:16px}
+.account-box .item .opt{color:var(--letter-muted);padding-left:44px;gap:4px}.account-box .item .opt .settings{gap:0}.catch-all-toggle{font-size:11px;padding:0 4px;text-align:left}.catch-all-toggle .letter-icon{width:16px}
+@media(max-width:760px){.account-box .item{padding:14px 8px}.current-address{font-size:0}.current-address .letter-icon{width:20px}.account-box .item .opt{padding-left:0}.catch-all-toggle{font-size:10px}}
 </style>

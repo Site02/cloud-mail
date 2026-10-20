@@ -8,7 +8,7 @@ import {VitePWA} from 'vite-plugin-pwa';
 
 export default defineConfig(({mode}) => {
     const env = loadEnv(mode, process.cwd(), 'VITE')
-    return {
+  return {
         server: {
             host: true,
             port: 3001,
@@ -48,6 +48,7 @@ export default defineConfig(({mode}) => {
         ],
         resolve: {
             alias: {
+                '@element-plus/icons-vue': path.resolve(__dirname, 'src/icons/element-plus.js'),
                 '@': path.resolve(__dirname, 'src')
             }
         },
