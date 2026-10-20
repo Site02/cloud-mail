@@ -102,7 +102,9 @@ describe('translation-html-utils', () => {
 	});
 
 	it('分块数量超限时抛错', () => {
-		const many = Array.from({ length: translationConst.CHUNK_MAX_ITEMS * 40 }, (_, i) => '<p>t' + i + '</p>').join('');
+		// 单元数按「单块条目上限 × (分块上限 + 4)」生成，改常量时这条边界测试自动跟随
+		const total = translationConst.CHUNK_MAX_ITEMS * (translationConst.MAX_CHUNKS + 4);
+		const many = Array.from({ length: total }, (_, i) => '<p>t' + i + '</p>').join('');
 		const doc = translationHtmlUtils.parse(many);
 		const units = translationHtmlUtils.extractUnits(doc);
 

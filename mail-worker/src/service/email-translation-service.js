@@ -32,7 +32,7 @@ const translationService = {
 		const target = String(lang || '').toLowerCase();
 		if (target === 'zh' || target === 'zh-cn' || target === 'zh-hans') return 'zh';
 		if (target === 'en' || target === 'en-us' || target === 'en-gb') return 'en';
-		throw new BizError(getT(c)('translationLanguageUnsupported'), 400);
+		throw new BizError(getT(c)('translationLanguageUnsupported'), 400, 'translationLanguageUnsupported');
 	},
 
 	async readableEmail(c, emailId, userId) {
@@ -43,7 +43,7 @@ const translationService = {
 			WHERE e.email_id = ? AND e.user_id = ? AND e.is_del = 0 AND a.is_del = 0
 		`).bind(emailId, userId).first();
 		if (!row) {
-			throw new BizError(getT(c)('translationNotFound'), 404);
+			throw new BizError(getT(c)('translationNotFound'), 404, 'translationNotFound');
 		}
 		return row;
 	},
@@ -64,7 +64,7 @@ const translationService = {
 		const sourceBody = htmlMode ? content : text;
 
 		if (!String(sourceBody || '').trim()) {
-			throw new BizError(getT(c)('translationEmpty'), 400);
+			throw new BizError(getT(c)('translationEmpty'), 400, 'translationEmpty');
 		}
 
 		try {
@@ -84,7 +84,7 @@ const translationService = {
 			const units = translationHtmlUtils.extractUnits(document);
 			if (units.length === 0) {
 				const plain = emailUtils.htmlToText(sourceBody);
-				if (!plain) throw new BizError(getT(c)('translationEmpty'), 400);
+				if (!plain) throw new BizError(getT(c)('translationEmpty'), 400, 'translationEmpty');
 				// 降级到纯文本时同样要查字符上限，否则这条路径能绕过全文限制
 				if (Array.from(plain).length > translationConst.MAX_TEXT_CODEPOINTS) {
 					throw new BizError(getT(c)('translationTooLarge'), 413, 'translationTooLarge');
@@ -118,7 +118,7 @@ const translationService = {
 
 		const plainUnits = translationHtmlUtils.extractPlainUnits(text);
 		if (plainUnits.length === 0) {
-			throw new BizError(getT(c)('translationEmpty'), 400);
+			throw new BizError(getT(c)('translationEmpty'), 400, 'translationEmpty');
 		}
 		const plainChunks = translationHtmlUtils.buildPlainChunks(plainUnits);
 		const codepoints = plainUnits.reduce((sum, unit) => sum + Array.from(unit.text).length, 0);
@@ -178,15 +178,18 @@ const translationService = {
 			content: job?.content || '',
 			text: job?.text || '',
 			fallback: !!job?.fallback,
+			// 前端要靠它区分「额度用尽」和「AI 出错」，只给一句 message 无法本地化
+			errorKey: job?.error_key || '',
 			cached: false
 		};
 		return Object.assign(payload, extra);
 	},
 
 	async start(c, params, userId) {
+		await translationRepository.ensureSchema(c);
 		const emailId = Number(params.emailId);
 		if (!Number.isInteger(emailId) || emailId <= 0) {
-			throw new BizError(getT(c)('translationInvalidParams'), 400);
+			throw new BizError(getT(c)('translationInvalidParams'), 400, 'translationInvalidParams');
 		}
 		const lang = this.resolveLang(c, params.targetLang);
 		const row = await this.readableEmail(c, emailId, userId);
@@ -292,7 +295,7 @@ const translationService = {
 		if (!saved) {
 			await translationRepository.releaseQuota(c, userId, day, codepoints);
 			await translationRepository.releaseRate(c, userId, rateWindow);
-			throw new BizError(getT(c)('translationCacheFailed'), 500);
+			throw new BizError(getT(c)('translationCacheFailed'), 500, 'translationCacheFailed');
 		}
 
 		// 并发下 cache_key 唯一约束会让某个请求抢到别人的任务：此时退还额度并复用该任务，
@@ -327,7 +330,7 @@ const translationService = {
 			await translationRepository.deleteJob(c, saved.job_id);
 			await translationRepository.releaseQuota(c, userId, day, codepoints);
 			await translationRepository.releaseRate(c, userId, rateWindow);
-			throw new BizError(getT(c)('translationCacheFailed'), 500);
+			throw new BizError(getT(c)('translationCacheFailed'), 500, 'translationCacheFailed');
 		}
 		return this.toPayload(created);
 	},
@@ -346,11 +349,13 @@ const translationService = {
 	},
 
 	async status(c, params, userId) {
+		await translationRepository.ensureSchema(c);
 		const job = await this.loadJob(c, params.jobId, userId);
 		return this.toPayload(job);
 	},
 
 	async step(c, params, userId) {
+		await translationRepository.ensureSchema(c);
 		const jobId = String(params.jobId || '');
 		const job = await this.loadJob(c, jobId, userId);
 		if (job.state === STATE.DONE) {
@@ -419,7 +424,7 @@ const translationService = {
 			// 超时/网关错误属于“结果未知”，不自动重试（可能已产生模型计费）
 			const retryable = e?.uncertain !== true;
 			await translationRepository.releaseChunk(c, chunk.id, owner, retryable);
-			await translationRepository.updateJobState(c, jobId, STATE.RUNNING, { error_key: 'translationModelFailed' });
+			await translationRepository.updateJobState(c, jobId, STATE.RUNNING, { error_key: e?.errorKey || 'translationModelFailed' });
 			throw e;
 		}
 
@@ -478,7 +483,7 @@ const translationService = {
 			}
 			if (!text) {
 				await translationRepository.updateJobState(c, job.job_id, STATE.ERROR, { error_key: 'translationInvalidOutput' });
-				throw new BizError(getT(c)('translationInvalidOutput'), 502);
+				throw new BizError(getT(c)('translationInvalidOutput'), 502, 'translationInvalidOutput');
 			}
 			format = translationConst.FORMAT.TEXT;
 			fallback = true;

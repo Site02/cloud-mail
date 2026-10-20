@@ -1,11 +1,55 @@
 import translationConst from '../const/translation-const';
+import translationSchema from '../const/translation-schema';
 
 // 只保留今天与昨天之前的配额行会被清掉，这里给 cron 一个安全的日期下界
 function quotaDayBefore(now) {
 	return new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+// 部署（wrangler deploy / Workers Builds）不会执行 /api/init，翻译表必须能自愈，
+// 否则线上第一次翻译就是 D1_ERROR: no such table。DDL 全部幂等，
+// 每个 isolate 首次翻译请求做一次，失败不缓存，下个请求会重试。
+let schemaReady = false;
+let schemaPromise = null;
+
+function ensureTranslationSchema(c) {
+	if (schemaReady) {
+		return Promise.resolve(true);
+	}
+	if (!schemaPromise) {
+		schemaPromise = (async () => {
+			try {
+				await c.env.db.batch(translationSchema.map(sql => c.env.db.prepare(sql)));
+			} catch (e) {
+				console.error('翻译表自愈失败', e?.message);
+				return false;
+			}
+			try {
+				// 与 init 的 v3_4DB 保持同一份语句：缺权限行时工具栏按钮不显示
+				await c.env.db.prepare(`
+					INSERT INTO perm (name, perm_key, pid, type, sort)
+					SELECT '邮件翻译', 'email:translate', 1, 2, 2
+					WHERE NOT EXISTS (SELECT 1 FROM perm WHERE perm_key = 'email:translate')
+				`).run();
+			} catch (e) {
+				console.warn('翻译权限自愈失败', e?.message);
+			}
+			schemaReady = true;
+			return true;
+		})().finally(() => {
+			if (!schemaReady) {
+				schemaPromise = null;
+			}
+		});
+	}
+	return schemaPromise;
+}
+
 const db = {
+
+	ensureSchema(c) {
+		return ensureTranslationSchema(c);
+	},
 
 	prepare(c, sql, ...params) {
 		return c.env.db.prepare(sql).bind(...params);

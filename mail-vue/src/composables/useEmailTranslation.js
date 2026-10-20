@@ -25,16 +25,26 @@ function putCache(key, value) {
   }
 }
 
+// 服务端 BizError 发的是小驼峰 errorKey（translationRateLimited），
+// 旧写法是大写下划线。键统一做「去分隔符 + 小写」归一化，两种都能命中，
+// 否则映射永远对不上，线上只剩一句“翻译失败，请重试”。
 const ERROR_KEY_MAP = {
-  TRANSLATION_RATE_LIMITED: 'translationRateLimited',
-  TRANSLATION_QUOTA_EXCEEDED: 'translationQuotaExceeded',
-  TRANSLATION_TOO_LARGE: 'translationTooLarge',
-  TRANSLATION_TIMEOUT: 'translationTimeout',
-  TRANSLATION_UNAVAILABLE: 'translationUnavailable',
-  TRANSLATION_NOT_FOUND: 'translationNotFound',
-  TRANSLATION_FORBIDDEN: 'translationForbidden',
-  TRANSLATION_EMPTY: 'translationNoText',
-  TRANSLATION_SOURCE_CHANGED: 'translationSourceChanged'
+  translationratelimited: 'translationRateLimited',
+  translationquotaexceeded: 'translationQuotaExceeded',
+  translationtoolarge: 'translationTooLarge',
+  translationtimeout: 'translationTimeout',
+  translationaiunavailable: 'translationUnavailable',
+  translationmodelfailed: 'translationUnavailable',
+  translationinvalidoutput: 'translationUnavailable',
+  translationunavailable: 'translationUnavailable',
+  translationempty: 'translationNoText',
+  translationnotfound: 'translationNotFound',
+  translationforbidden: 'translationForbidden',
+  translationsourcechanged: 'translationSourceChanged',
+  translationjobexpired: 'translationFailed',
+  translationinvalidparams: 'translationFailed',
+  translationcachefailed: 'translationFailed',
+  translationlanguageunsupported: 'translationFailed'
 }
 
 export function useEmailTranslation(emailRef) {
@@ -93,16 +103,26 @@ export function useEmailTranslation(emailRef) {
   }
 
   function toMessage(error) {
-    const code = error?.errorKey || error?.data?.errorKey || ''
-    if (code && ERROR_KEY_MAP[code]) {
-      return t(ERROR_KEY_MAP[code])
+    const rawKey = error?.errorKey || error?.data?.errorKey || ''
+    const key = String(rawKey).replace(/[\s_-]/g, '').toLowerCase()
+    if (key && ERROR_KEY_MAP[key]) {
+      return t(ERROR_KEY_MAP[key])
     }
+    // 服务端失败统一返回 HTTP 200，真正的状态码在 body 的 code 上
     const bizCode = error?.code || error?.data?.code
     if (bizCode === 401) return t('translationLoginExpired')
     if (bizCode === 403) return t('translationForbidden')
     if (bizCode === 429) return t('translationRateLimited')
     if (bizCode === 413) return t('translationTooLarge')
     if (bizCode === 504) return t('translationTimeout')
+    // 没有映射时带上服务端原话：否则线上只有“翻译失败”，
+    // 分不清是模型超时、额度用尽还是数据库缺表
+    const body = error?.isAxiosError || error?.config || error?.request ? null : error
+    const message = body?.message || body?.data?.message || ''
+    if (typeof message === 'string' && message.trim()
+      && !/D1_ERROR|SQLITE|no such (table|column)|TypeError|is not a function/i.test(message)) {
+      return message
+    }
     return t('translationFailed')
   }
 
@@ -152,7 +172,7 @@ export function useEmailTranslation(emailRef) {
         if (myEpoch !== epoch) return
         progress.value = { done: payload.progress?.done || 0, total: payload.progress?.total || 0 }
         if (payload.state === 'error') {
-          throw { errorKey: 'TRANSLATION_UNAVAILABLE' }
+          throw { errorKey: payload.errorKey || 'TRANSLATION_UNAVAILABLE' }
         }
         // 分块正被并发请求持有：退避后再试，避免空转打满接口
         if (payload.busy) {

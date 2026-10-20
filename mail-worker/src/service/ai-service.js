@@ -72,23 +72,74 @@ const aiService = {
 		return filterList.some(item => item === fromEmail || item === fromDomain);
 	},
 
-	async translateBatch(c, lang, items, options = {}) {
-		const envModel = options.model
-			|| c.env?.ai_translate_model || c.env?.ai_model || translationConst.MODEL;
-		const timeoutMs = options.timeoutMs || translationConst.AI_TIMEOUT_MS;
+	// 批量 JSON 契约拿不到时不要整块报废：这里按 id 校验、逐条补译，
+	// 保证「漏项」只影响单条文本，而不是让整封邮件显示“翻译失败”
 
+	// 模型输出经常带上 ```json 围栏或前后说明，直接 JSON.parse 会把可用结果判成失败
+	parseItems(content) {
+		if (typeof content !== 'string' || !content.trim()) {
+			return null;
+		}
+		const text = content.trim();
+		const candidates = [text];
+		const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+		if (fenced) {
+			candidates.push(fenced[1].trim());
+		}
+		const start = text.indexOf('{');
+		const end = text.lastIndexOf('}');
+		if (start > -1 && end > start) {
+			candidates.push(text.slice(start, end + 1));
+		}
+		for (const candidate of candidates) {
+			try {
+				const json = JSON.parse(candidate);
+				if (Array.isArray(json?.items)) {
+					return json.items;
+				}
+			} catch (e) {
+				// 换下一种候选继续解析
+			}
+		}
+		return null;
+	},
+
+	// 源文有内容却回空白是漏译；长度暴涨说明模型在乱写，两者都不能写进译文
+	acceptUnit(item, text) {
+		if (typeof text !== 'string') {
+			return false;
+		}
+		if (item.text.trim() && !text.trim()) {
+			return false;
+		}
+		return text.length <= item.text.length * 6 + 64;
+	},
+
+	// 允许模型改变返回顺序（集合对得上就够），未知 id、重复 id、异常条目一律丢弃等待补译
+	collectItems(list, items, map) {
+		const expected = new Map(items.map(item => [item.id, item]));
+		for (const row of Array.isArray(list) ? list : []) {
+			if (!row || typeof row.id !== 'string' || typeof row.text !== 'string') {
+				continue;
+			}
+			const item = expected.get(row.id);
+			if (!item || map.has(row.id)) {
+				continue;
+			}
+			if (!this.acceptUnit(item, row.text)) {
+				continue;
+			}
+			map.set(row.id, row.text);
+		}
+		return map;
+	},
+
+	async runModel(c, model, messages, timeoutMs) {
 		if (!c.env?.ai) {
-			throw new BizError(getT(c)('translationAiUnavailable'), 503);
+			throw new BizError(getT(c)('translationAiUnavailable'), 503, 'translationAiUnavailable');
 		}
 
-		const runPromise = c.env.ai.run(envModel, {
-			messages: [
-				{ role: 'system', content: translationPrompt.system(lang) },
-				{ role: 'user', content: translationPrompt.user(lang, items) }
-			],
-			temperature: 0,
-			max_tokens: 2048
-		});
+		const runPromise = c.env.ai.run(model, { messages, temperature: 0, max_tokens: 2048 });
 
 		// 超时先返回时，模型 promise 仍可能稍后 reject，这里挂一个兜底避免未处理拒绝
 		runPromise.catch(() => {});
@@ -96,7 +147,7 @@ const aiService = {
 		let timer = null;
 		const timeoutPromise = new Promise((resolve, reject) => {
 			timer = setTimeout(() => {
-				const error = new BizError(getT(c)('translationTimeout'), 504);
+				const error = new BizError(getT(c)('translationTimeout'), 504, 'translationTimeout');
 				error.uncertain = true;
 				reject(error);
 			}, timeoutMs);
@@ -106,9 +157,17 @@ const aiService = {
 		try {
 			response = await Promise.race([runPromise, timeoutPromise]);
 		} catch (e) {
-			if (e?.name === 'BizError') throw e;
-			// 网络/网关层异常属于“模型是否已计费未知”，与超时同等对待，不自动重试
-			const error = new BizError(getT(c)('translationModelFailed'), 502);
+			if (e?.name === 'BizError') {
+				throw e;
+			}
+			// 网络/网关层异常属于“模型是否已计费未知”，与超时同等对待，不自动重试；
+			// 但要把上游原话带给运维，否则线上只看到一句“翻译失败，请重试”
+			const detail = String(e?.message || e || '').replace(/\s+/g, ' ').slice(0, 160);
+			const error = new BizError(
+				detail ? `${getT(c)('translationModelFailed')}（${detail}）` : getT(c)('translationModelFailed'),
+				502,
+				'translationModelFailed'
+			);
 			error.uncertain = true;
 			throw error;
 		} finally {
@@ -117,41 +176,113 @@ const aiService = {
 
 		const content = typeof response === 'string' ? response : response?.response;
 		if (typeof content !== 'string' || !content.trim()) {
-			throw new BizError(getT(c)('translationInvalidOutput'), 502);
+			throw new BizError(getT(c)('translationInvalidOutput'), 502, 'translationInvalidOutput');
 		}
+		return content;
+	},
 
-		let json;
+	cleanUnitOutput(content) {
+		return String(content || '')
+			.trim()
+			// 模型偶尔把整段译文放进引号里，或加一行「译文：」前缀
+			.replace(/^["'“”『「]+/, '')
+			.replace(/["'“”』」]+$/, '')
+			.replace(/^(translation|译文|翻译)\s*[:：]\s*/i, '')
+			.trim();
+	},
+
+	// 逐条补译：并行发起，单条失败不影响其它条目，总覆盖面由调用方判定
+	async repairUnits(c, lang, items, model, state) {
+		// 只补缺口：已经拿到的条目不再重发，避免同一条文本被模型计费两次
+		const targets = items
+			.filter(item => !state.map.has(item.id))
+			.slice(0, translationConst.REPAIR_MAX_UNITS);
+		const settled = await Promise.allSettled(targets.map(async item => {
+			const content = await this.runModel(
+				c,
+				model,
+				[
+					{ role: 'system', content: translationPrompt.unitSystem(lang) },
+					{ role: 'user', content: item.text }
+				],
+				translationConst.REPAIR_TIMEOUT_MS
+			);
+			return [item.id, this.cleanUnitOutput(content)];
+		}));
+
+		for (let i = 0; i < settled.length; i++) {
+			const item = targets[i];
+			const row = settled[i];
+			if (row.status === 'rejected') {
+				if (row.reason?.uncertain === true) {
+					state.uncertain = true;
+				}
+				console.warn('翻译补译失败', row.reason?.message);
+				continue;
+			}
+			const [id, text] = row.value;
+			// 纯文本契约下模型仍可能回一段 JSON：那不是译文，宁可判失败
+			if (/^\s*[[{]/.test(text) && /"(items|id|text)"\s*:/.test(text)) {
+				continue;
+			}
+			if (this.acceptUnit(item, text)) {
+				state.map.set(id, text);
+			}
+		}
+		return state;
+	},
+
+	async translateBatch(c, lang, items, options = {}) {
+		const envModel = options.model
+			|| c.env?.ai_translate_model || c.env?.ai_model || translationConst.MODEL;
+		const timeoutMs = options.timeoutMs || translationConst.AI_TIMEOUT_MS;
+
+		if (!c.env?.ai) {
+			throw new BizError(getT(c)('translationAiUnavailable'), 503, 'translationAiUnavailable');
+		}
+		if (!Array.isArray(items) || items.length === 0) {
+			return { map: new Map(), model: envModel };
+		}
+		const state = { map: new Map(), uncertain: false };
+		let batchError = null;
+		// 只有「模型按 JSON 契约回了东西、但漏了几条」才值得补译
+		let canRepair = false;
+
 		try {
-			json = JSON.parse(content);
+			const content = await this.runModel(c, envModel, [
+				{ role: 'system', content: translationPrompt.system(lang) },
+				{ role: 'user', content: translationPrompt.user(lang, items) }
+			], timeoutMs);
+			const list = this.parseItems(content);
+			if (list) {
+				canRepair = true;
+				this.collectItems(list, items, state.map);
+				if (state.map.size === items.length) {
+					return { map: state.map, model: envModel };
+				}
+			}
+			batchError = new BizError(getT(c)('translationInvalidOutput'), 502, 'translationInvalidOutput');
 		} catch (e) {
-			throw new BizError(getT(c)('translationInvalidOutput'), 502);
+			// 超时与网关异常属于“结果未知”：不补译，避免同一个模型被重复计费
+			if (e?.uncertain === true) {
+				throw e;
+			}
+			batchError = e;
 		}
 
-		const list = json?.items;
-		if (!Array.isArray(list) || list.length !== items.length) {
-			throw new BizError(getT(c)('translationInvalidOutput'), 502);
+		// 整段不是 JSON 说明模型根本没在工作：这时补译只会把垃圾文本当译文存下来，
+		// 直接把失败抛给调用方，由分块重试或用户重试处理
+		if (canRepair) {
+			await this.repairUnits(c, lang, items, envModel, state);
+			if (state.map.size === items.length) {
+				return { map: state.map, model: envModel };
+			}
 		}
 
-		const map = new Map();
-		for (let i = 0; i < list.length; i++) {
-			const row = list[i];
-			const expect = items[i];
-			if (!row || typeof row.id !== 'string' || typeof row.text !== 'string') {
-				throw new BizError(getT(c)('translationInvalidOutput'), 502);
-			}
-			if (row.id !== expect.id) {
-				throw new BizError(getT(c)('translationInvalidOutput'), 502);
-			}
-			if (row.text.length > expect.text.length * 6 + 64) {
-				throw new BizError(getT(c)('translationInvalidOutput'), 502);
-			}
-			// 源文本有内容却翻回空白，说明模型漏译，不能当作成功
-			if (expect.text.trim() && !row.text.trim()) {
-				throw new BizError(getT(c)('translationInvalidOutput'), 502);
-			}
-			map.set(row.id, row.text);
+		if (batchError && state.uncertain) {
+			batchError.uncertain = true;
 		}
-		return { map, model: envModel };
+		throw batchError || new BizError(getT(c)('translationInvalidOutput'), 502, 'translationInvalidOutput');
 	}
 };
 

@@ -21,11 +21,11 @@ const translationConst = {
 		TEXT: 'text'
 	},
 	MODEL: '@cf/meta/llama-3.1-8b-instruct-fast',
-	PROMPT_VERSION: 'email-translate-v1',
+	PROMPT_VERSION: 'email-translate-v2',
 	PARSER_VERSION: 'dom-v1',
 	SANITIZER_VERSION: 'safe-dom-v1',
-	// 单块最多承载的文本单元数量
-	CHUNK_MAX_ITEMS: 24,
+	// 单块最多承载的文本单元数量；条目越多模型越容易漏项/重复，8 是实测稳定点
+	CHUNK_MAX_ITEMS: 8,
 	// 单块源文本 UTF-8 字节上限（保守值，实际模型窗口以部署配置为准）
 	CHUNK_MAX_BYTES: 1600,
 	// 单个文本单元超过该字节数时按句/空白拆分
@@ -37,9 +37,15 @@ const translationConst = {
 	MAX_TEXT_CODEPOINTS: 32 * 1024,
 	MAX_DOM_NODES: 10000,
 	MAX_DOM_DEPTH: 64,
-	MAX_CHUNKS: 32,
+	// 分块数上限：单块条目数下调后要相应放宽，避免长邮件被判超限
+	// 8 × 48 个单元仍能覆盖长邮件；分块多不等于慢，前端每轮只推进一块
+	MAX_CHUNKS: 48,
 	// 单次模型调用等待上限（毫秒）；超时属于结果未知，不自动重发
 	AI_TIMEOUT_MS: 20 * 1000,
+	// 批量 JSON 契约失败时，逐条用纯文本契约补译的上限与单条超时：
+	// 漏项比整块作废便宜得多，但不允许无限重发
+	REPAIR_MAX_UNITS: 8,
+	REPAIR_TIMEOUT_MS: 12 * 1000,
 	// 分块租约（毫秒）
 	LEASE_MS: 120 * 1000,
 	// 任务保留天数
