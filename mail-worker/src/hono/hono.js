@@ -29,7 +29,7 @@ app.onError((err, c) => {
 		return c.json(result.fail('请按照文档更新数据库<br/>Please update the database as documented',502));
 	}
 
-	return c.json(result.fail(err.message, err.code));
+	return c.json(result.fail(err.message, err.code, err.errorKey));
 });
 
 export default app;

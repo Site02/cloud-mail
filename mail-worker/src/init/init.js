@@ -1,6 +1,7 @@
 import settingService from '../service/setting-service';
 import emailUtils from '../utils/email-utils';
 import {emailConst} from "../const/entity-const";
+import translationSchema from '../const/translation-schema';
 
 const dbInit = {
 	async init(c) {
@@ -32,8 +33,38 @@ const dbInit = {
 		await this.v3_1DB(c);
 		await this.v3_2DB(c);
 		await this.v3_3DB(c);
+		const failed = await this.v3_4DB(c);
 		await settingService.refresh(c);
+		if (failed.length > 0) {
+			return c.text('❌ ' + failed.join('; '), 500);
+		}
 		return c.text('success');
+	},
+
+
+	// 返回失败原因而不是静默吞掉：翻译表缺失时接口会 500，运维必须能看到
+	async v3_4DB(c) {
+		const errors = [];
+		try {
+			await c.env.db.batch(translationSchema.map(sql => c.env.db.prepare(sql)));
+		} catch (e) {
+			errors.push('翻译表：' + e.message);
+		}
+
+		try {
+			await c.env.db.prepare(`
+				INSERT INTO perm (name, perm_key, pid, type, sort)
+				SELECT '邮件翻译', 'email:translate', 1, 2, 2
+				WHERE NOT EXISTS (SELECT 1 FROM perm WHERE perm_key = 'email:translate')
+			`).run();
+		} catch (e) {
+			errors.push('翻译权限：' + e.message);
+		}
+
+		for (const message of errors) {
+			console.error(`初始化失败 ${message}`);
+		}
+		return errors;
 	},
 
 	async v3_3DB(c) {
