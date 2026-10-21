@@ -524,7 +524,7 @@ describe('translation provider chain', () => {
 	it('兜底通道产出的译文不会写进可复用的 KV 缓存', async () => {
 		const openai = createOpenAi(() => ({ status: 429, payload: { error: { message: 'rate limited' } } }));
 		const ai = createAi();
-		const { c, env } = build({
+		const { c, env, sqlite } = build({
 			vars: {
 				ai_translate_openai_base_url: 'https://api.example.com/v1',
 				ai_translate_openai_api_key: 'sk-test',
@@ -542,6 +542,13 @@ describe('translation provider chain', () => {
 		expect(done.content).toContain('[护]Hello');
 		// 主力是 Qwen，译文却来自 Workers AI：不能留在主力通道的缓存键下
 		expect(env.kv.store.size).toBe(0);
+		expect(sqlite.prepare('SELECT cache_key FROM email_translation WHERE email_id = 7').get().cache_key)
+			.toContain(':fallback:');
+
+		// 再点一次翻译：不能被这条兜底结果“缓存命中”，要重新翻
+		const again = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		expect(env.kv.store.size).toBe(0);
+		expect(again.cached).not.toBe(true);
 	});
 
 	it('跨日退款不会扣掉今天的用量', async () => {

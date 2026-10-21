@@ -99,6 +99,13 @@ const db = {
 		return row;
 	},
 
+	// 换一个缓存键：兜底通道产出的结果不能被当成主力通道的缓存复用
+	async rekeyJob(c, jobId, cacheKey) {
+		await c.env.db.prepare(
+			`UPDATE email_translation SET cache_key = ?, update_time = ? WHERE job_id = ?`
+		).bind(cacheKey, Date.now(), jobId).run();
+	},
+
 	async selectJobByCacheKey(c, cacheKey) {
 		return await c.env.db.prepare(`SELECT * FROM email_translation WHERE cache_key = ?`).bind(cacheKey).first();
 	},

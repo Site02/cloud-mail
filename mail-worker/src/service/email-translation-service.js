@@ -565,7 +565,10 @@ const translationService = {
 		if (won && !mixed) {
 			await this.writeKv(c, userId, job.cache_key, payload);
 		} else if (won && mixed) {
-			console.warn('翻译使用了兜底通道，跳过 KV 缓存', JSON.stringify({ jobId: job.job_id, primary, providers: Array.from(providers) }));
+			// 既不能写 KV，也不能留在主力的缓存键下：否则下一次 start() 会顺着
+			// selectJobByCacheKey 命中这条 done 任务并把兜底译文回灌进主力缓存
+			await translationRepository.rekeyJob(c, job.job_id, `${job.cache_key}:fallback:${Array.from(providers).join(',')}`);
+			console.warn('翻译使用了兜底通道，隔离缓存键', JSON.stringify({ jobId: job.job_id, primary, providers: Array.from(providers) }));
 		}
 		return Object.assign({}, payload, { cached: !won });
 	}
