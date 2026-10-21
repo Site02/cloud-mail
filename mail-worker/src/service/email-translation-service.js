@@ -395,6 +395,11 @@ const translationService = {
 		if (job.state === STATE.DONE) {
 			return this.toPayload(job, { cached: true });
 		}
+		// error 是终态：迟到的并发 step 不能再拿它跑一遍，否则会重跑分块并二次退款
+		if (job.state === STATE.ERROR) {
+			const key = job.error_key || 'translationModelFailed';
+			throw new BizError(getT(c)(key), 502, key);
+		}
 
 		const row = await this.readableEmail(c, job.email_id, userId);
 		const plan = await this.buildPlan(c, row, job.target_lang);
@@ -457,7 +462,8 @@ const translationService = {
 			const retryable = e?.uncertain !== true;
 			const errorKey = e?.errorKey || 'translationModelFailed';
 			await translationRepository.releaseChunk(c, chunk.id, owner, retryable);
-			await translationRepository.updateJobState(c, jobId, STATE.RUNNING, { error_key: errorKey });
+			// 只更新错误码，别把任务状态拉回 running（并发下会造成二次退款）
+			await translationRepository.touchJobErrorKey(c, jobId, errorKey);
 			// 前端一报错就停止 step，不会再打第四次请求：重试用尽必须在这一轮就判死并退额度，
 			// 否则用户点“重试”时旧任务还挂在 running，当天的额度也不会退（线上就是这么吃满 20 次的）
 			const exhausted = await translationRepository.countExhausted(c, jobId, now);

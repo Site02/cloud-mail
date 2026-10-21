@@ -423,6 +423,29 @@ const aiService = {
 		return error;
 	},
 
+	// HTTP 通道的错误分类：只有“明确的拒绝”才允许换通道重发。
+	// 5xx / 408 / 504 说明上游可能已经执行过，换通道等于同一段文本再翻一遍、再计费一遍
+	httpError(c, response, payload, label) {
+		const detail = String(payload?.error?.message || '').replace(/\s+/g, ' ').slice(0, 160);
+		if (response.status === 429) {
+			const error = new BizError(getT(c)('translationRateLimited'), 429, 'translationRateLimited');
+			error.fallbackable = true;
+			return error;
+		}
+		if (response.status >= 500 || response.status === 408) {
+			const error = this.uncertainError(c, 'translationTimeout', 504);
+			error.message = `${getT(c)('translationTimeout')}（${label} ${response.status}${detail ? `：${detail}` : ''}）`;
+			return error;
+		}
+		const error = new BizError(
+			`${getT(c)('translationModelFailed')}（${label} ${response.status}${detail ? `：${detail}` : ''}）`,
+			502,
+			'translationModelFailed'
+		);
+		error.fallbackable = true;
+		return error;
+	},
+
 	transportError(c, e) {
 		if (e?.name === 'BizError') {
 			return e;
@@ -442,14 +465,19 @@ const aiService = {
 		return Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : 0;
 	},
 
-	async runWorkersAi(c, model, messages, timeoutMs, maxTokens) {
+	async runWorkersAi(c, model, messages, timeoutMs, maxTokens, deadline) {
+		// 每次真正发起调用前都重算剩余预算，别让重试各自再拿一份完整时长
+		const slice = this.budget(timeoutMs, deadline);
+		if (slice <= 0) {
+			throw this.uncertainError(c, 'translationTimeout', 504);
+		}
 		const runPromise = c.env.ai.run(model, { messages, temperature: 0, max_tokens: maxTokens });
 		// 超时先返回时，模型 promise 仍可能稍后 reject，这里挂一个兜底避免未处理拒绝
 		runPromise.catch(() => {});
 
 		let timer = null;
 		const timeoutPromise = new Promise((resolve, reject) => {
-			timer = setTimeout(() => reject(this.uncertainError(c, 'translationTimeout', 504)), timeoutMs);
+			timer = setTimeout(() => reject(this.uncertainError(c, 'translationTimeout', 504)), slice);
 		});
 
 		let response;
@@ -480,7 +508,7 @@ const aiService = {
 		};
 	},
 
-	async runGemini(c, model, messages, timeoutMs, maxTokens) {
+	async runGemini(c, model, messages, timeoutMs, maxTokens, deadline) {
 		const key = String(c.env?.GEMINI_API_KEY || '').trim();
 		if (!key) {
 			const error = new BizError(getT(c)('translationAiUnavailable'), 503, 'translationAiUnavailable');
@@ -514,7 +542,11 @@ const aiService = {
 		let response = null;
 		let bodyText = '';
 		for (let attempt = 0; attempt < 2; attempt++) {
-			({ response, bodyText } = await this.postJson(c, doFetch, url, { 'x-goog-api-key': key }, buildBody(attempt === 0), timeoutMs));
+			const slice = this.budget(timeoutMs, deadline);
+			if (slice <= 0) {
+				throw this.uncertainError(c, 'translationTimeout', 504);
+			}
+			({ response, bodyText } = await this.postJson(c, doFetch, url, { 'x-goog-api-key': key }, buildBody(attempt === 0), slice));
 			// 这个模型版本不认 thinkingConfig 时去掉它重发一次，别把 400 当成翻译失败
 			if (!response.ok && attempt === 0 && response.status === 400 && /thinking/i.test(bodyText)) {
 				continue;
@@ -530,19 +562,11 @@ const aiService = {
 		}
 
 		if (!response.ok) {
-			const detail = String(payload?.error?.message || '').replace(/\s+/g, ' ').slice(0, 160);
-			if (response.status === 429) {
-				const error = new BizError(getT(c)('translationRateLimited'), 429, 'translationRateLimited');
-				error.fallbackable = true;
-				throw error;
-			}
-			const error = new BizError(
-				`${getT(c)('translationModelFailed')}（Gemini ${response.status}${detail ? `：${detail}` : ''}）`,
-				502,
-				'translationModelFailed'
-			);
-			error.fallbackable = true;
-			throw error;
+			throw this.httpError(c, response, payload, 'Gemini');
+		}
+		// 200 但信封坏掉：模型很可能已经跑完并计费了，属于结果未知，不许换通道重发
+		if (!payload) {
+			throw this.uncertainError(c, 'translationModelFailed', 504);
 		}
 
 		const candidate = payload?.candidates?.[0] || null;
@@ -593,7 +617,7 @@ const aiService = {
 	},
 
 	// OpenAI 兼容端点（硅基流动 / 魔搭 ModelScope / DeepSeek / Groq / OpenRouter / 自建 one-api）
-	async runOpenAi(c, model, messages, timeoutMs, maxTokens) {
+	async runOpenAi(c, model, messages, timeoutMs, maxTokens, deadline) {
 		const baseUrl = String(c.env?.ai_translate_openai_base_url || '').trim().replace(/\/+$/, '');
 		const key = String(c.env?.ai_translate_openai_api_key || '').trim();
 		if (!baseUrl || !key || !model) {
@@ -619,7 +643,11 @@ const aiService = {
 		let response = null;
 		let bodyText = '';
 		for (let attempt = 0; attempt < 2; attempt++) {
-			({ response, bodyText } = await this.postJson(c, doFetch, url, { Authorization: `Bearer ${key}` }, buildBody(wantsJson && attempt === 0), timeoutMs));
+			const slice = this.budget(timeoutMs, deadline);
+			if (slice <= 0) {
+				throw this.uncertainError(c, 'translationTimeout', 504);
+			}
+			({ response, bodyText } = await this.postJson(c, doFetch, url, { Authorization: `Bearer ${key}` }, buildBody(wantsJson && attempt === 0), slice));
 			// 有的兼容端点不认 response_format，去掉它重发一次，别把 400 当成翻译失败
 			if (!response.ok && attempt === 0 && response.status === 400 && /response_format|json_object|max_tokens/i.test(bodyText)) {
 				continue;
@@ -635,19 +663,10 @@ const aiService = {
 		}
 
 		if (!response.ok) {
-			const detail = String(payload?.error?.message || '').replace(/\s+/g, ' ').slice(0, 160);
-			if (response.status === 429) {
-				const error = new BizError(getT(c)('translationRateLimited'), 429, 'translationRateLimited');
-				error.fallbackable = true;
-				throw error;
-			}
-			const error = new BizError(
-				`${getT(c)('translationModelFailed')}（${response.status}${detail ? `：${detail}` : ''}）`,
-				502,
-				'translationModelFailed'
-			);
-			error.fallbackable = true;
-			throw error;
+			throw this.httpError(c, response, payload, 'HTTP');
+		}
+		if (!payload) {
+			throw this.uncertainError(c, 'translationModelFailed', 504);
 		}
 
 		const usage = payload?.usage || null;
@@ -710,31 +729,36 @@ const aiService = {
 		};
 	},
 
-	callProvider(c, provider, model, messages, timeoutMs, maxTokens) {
+	callProvider(c, provider, model, messages, timeoutMs, maxTokens, deadline) {
 		if (provider === 'gemini') {
-			return this.runGemini(c, model, messages, timeoutMs, maxTokens);
+			return this.runGemini(c, model, messages, timeoutMs, maxTokens, deadline);
 		}
 		if (provider === 'openai') {
-			return this.runOpenAi(c, model, messages, timeoutMs, maxTokens);
+			return this.runOpenAi(c, model, messages, timeoutMs, maxTokens, deadline);
 		}
-		return this.runWorkersAi(c, model, messages, timeoutMs, maxTokens);
+		return this.runWorkersAi(c, model, messages, timeoutMs, maxTokens, deadline);
 	},
 
-	async runModel(c, messages, timeoutMs, plan) {
+	async runModel(c, messages, timeoutMs, plan, deadline) {
 		const startedAt = Date.now();
 		const maxTokens = translationConst.AI_MAX_TOKENS;
+		// 回退链路共用同一个绝对截止时间：换通道不能重新拿一份完整时长
+		const absolute = Number.isFinite(deadline) ? deadline : startedAt + timeoutMs;
 		// 主用通道被限流/5xx/密钥失效时用另一个顶上，
 		// 用户不该因为“主力通道今天被限流”就看到翻译失败
 		const order = this.providerChain(c, plan.provider);
 
 		let lastError = null;
 		for (let i = 0; i < order.length; i++) {
+			if (absolute - Date.now() <= 0) {
+				throw lastError || this.uncertainError(c, 'translationTimeout', 504);
+			}
 			const provider = order[i];
 			const model = provider === 'gemini'
 				? plan.geminiModel
 				: provider === 'openai' ? plan.openaiModel : plan.workersModel;
 			try {
-				const result = await this.callProvider(c, provider, model, messages, timeoutMs, maxTokens);
+				const result = await this.callProvider(c, provider, model, messages, timeoutMs, maxTokens, absolute);
 				return this.modelResult(c, provider, model, result, startedAt, maxTokens);
 			} catch (e) {
 				lastError = e;
@@ -778,8 +802,9 @@ const aiService = {
 					{ role: 'system', content: translationPrompt.unitSystem(lang) },
 					{ role: 'user', content: item.text }
 				],
-				this.budget(translationConst.REPAIR_TIMEOUT_MS, deadline),
-				plan
+				translationConst.REPAIR_TIMEOUT_MS,
+				plan,
+				deadline
 			);
 			state.providers.add(meta.provider);
 			return [item.id, this.cleanUnitOutput(content)];
@@ -832,7 +857,7 @@ const aiService = {
 			const run = await this.runModel(c, [
 				{ role: 'system', content: translationPrompt.system(lang) },
 				{ role: 'user', content: translationPrompt.user(lang, items) }
-			], this.budget(timeoutMs, deadline), plan);
+			], timeoutMs, plan, deadline);
 			state.providers.add(run.meta.provider);
 			const list = this.parseItems(run.content);
 			if (list) {

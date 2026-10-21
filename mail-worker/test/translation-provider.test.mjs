@@ -572,4 +572,66 @@ describe('translation provider chain', () => {
 		expect(past).toMatchObject({ jobs: 0, codepoints: 500 - 16 });
 		expect(todayRow.jobs).toBe(1);
 	});
+
+	it('任务判死后不会因为迟到的 step 二次退款', async () => {
+		const ai = createAi({ bad: true });
+		const { c, sqlite } = build({ vars: { ai } });
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		for (let i = 0; i < 3; i++) {
+			try {
+				await service.step(c, { jobId: payload.jobId }, 1);
+			} catch (e) {
+				// 重试逐次耗尽
+			}
+		}
+		// 迟到的并发请求：error 是终态，直接把存下来的错误码抛回去，不能再跑一遍分块
+		await expect(service.step(c, { jobId: payload.jobId }, 1)).rejects.toMatchObject({
+			errorKey: 'translationInvalidOutput',
+			code: 502
+		});
+
+		const quota = sqlite.prepare('SELECT jobs, codepoints FROM translation_quota WHERE user_id = 1').get();
+		expect(quota).toMatchObject({ jobs: 0, codepoints: 0 });
+	});
+
+	it('上游 5xx 属于结果未知，不换通道重发', async () => {
+		const gemini = createGemini(() => ({ status: 503, payload: { error: { message: 'upstream unavailable' } } }));
+		const ai = createAi();
+		const { c } = build({ vars: { GEMINI_API_KEY: 'test-key', translateFetch: gemini.fetchImpl, ai } });
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		await expect(service.step(c, { jobId: payload.jobId }, 1)).rejects.toMatchObject({
+			errorKey: 'translationTimeout',
+			code: 504
+		});
+		// 上游可能已经跑完并计费了：换通道 = 同一段文本再翻一遍
+		expect(ai.calls.length).toBe(0);
+	});
+
+	it('200 但响应信封坏掉时按结果未知处理，不换通道重发', async () => {
+		const calls = [];
+		const broken = async (url, init) => {
+			calls.push({ url });
+			return { ok: true, status: 200, text: async () => 'oops, not json' };
+		};
+		const ai = createAi();
+		const { c } = build({ vars: { GEMINI_API_KEY: 'test-key', translateFetch: broken, ai } });
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		await expect(service.step(c, { jobId: payload.jobId }, 1)).rejects.toMatchObject({
+			errorKey: 'translationModelFailed',
+			code: 504
+		});
+		expect(ai.calls.length).toBe(0);
+	});
+
+	it('预算耗尽后不再发起新的模型调用', async () => {
+		const { default: aiService } = await import('../src/service/ai-service.js');
+		expect(aiService.budget(30000, Date.now() - 1)).toBe(0);
+		expect(aiService.budget(30000, Date.now() + 5000)).toBeLessThanOrEqual(5000);
+	});
 });

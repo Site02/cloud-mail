@@ -239,6 +239,18 @@ const db = {
 
 	// 原子占用配额：超过上限时不返回行（并发安全，无需先读后写）
 	// 只有「第一次」把任务判死才算失败：并发 step 同时失败时不能重复退额度
+	// 只写错误码，不碰 state：迟到的并发 step 一旦把 error 改回 running，
+	// 下一次失败会再走一遍 failJob，把别人的额度也退掉
+	async touchJobErrorKey(c, jobId, errorKey) {
+		await c.env.db.prepare(
+			`UPDATE email_translation SET error_key = ?, update_time = ?
+			 WHERE job_id = ? AND state <> ? AND state <> ?`
+		).bind(
+			errorKey || 'translationModelFailed', Date.now(),
+			jobId, translationConst.STATE.DONE, translationConst.STATE.ERROR
+		).run();
+	},
+
 	async markJobErrorOnce(c, jobId, errorKey) {
 		const result = await c.env.db.prepare(`
 			UPDATE email_translation SET state = ?, error_key = ?, update_time = ?
