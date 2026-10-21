@@ -12,7 +12,9 @@ const HELP = `
 用法: node scripts/verify-translation.mjs --token=<JWT> [选项]
 
 选项:
-  --token=<JWT>     必填，登录后的 Authorization token
+  --token=<JWT>     登录后的 Authorization token
+  --user=<email>    账号邮箱，和 --password 一起用时脚本自己登录取 token
+  --password=<pwd>  账号密码
   --email=<id>      指定邮件 id；不填则自动取最近一封
   --lang=<zh|en>    目标语言，默认 zh
   --base=<url>      站点地址，默认 https://email.pei.ee
@@ -43,8 +45,8 @@ function parseArgs(argv) {
 		args[match[1]] = match[2];
 	}
 	args.base = args.base.replace(/\/+$/, '');
-	if (!args.token) {
-		console.error('缺少 --token=<JWT>');
+	if (!args.token && !(args.user && args.password)) {
+		console.error('需要 --token=<JWT>，或 --user=<email> --password=<pwd>');
 		console.log(HELP);
 		process.exit(1);
 	}
@@ -58,6 +60,23 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 const failures = [];
 
+let authToken = args.token || '';
+
+async function login() {
+	const response = await fetch(`${args.base}/api/login`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ email: args.user, password: args.password })
+	});
+	const data = await response.json();
+	if (data?.code !== 200 || !data?.data?.token) {
+		throw new Error(`登录失败：${data?.message || 'HTTP ' + response.status}`);
+	}
+	authToken = data.data.token;
+	// authInfo 写在 KV 里，最终一致：登录后立刻用可能被判 401
+	await new Promise(resolve => setTimeout(resolve, 1500));
+}
+
 function pass(name, extra = '') {
 	console.log(`  ✅ ${name}${extra ? ' — ' + extra : ''}`);
 }
@@ -67,12 +86,12 @@ function fail(name, extra = '') {
 	console.log(`  ❌ ${name}${extra ? ' — ' + extra : ''}`);
 }
 
-async function api(path, { method = 'GET', body } = {}) {
+async function api(path, { method = 'GET', body } = {}, retried = false) {
 	const url = `${args.base}/api${path}`;
 	const response = await fetch(url, {
 		method,
 		headers: {
-			Authorization: args.token,
+			Authorization: authToken,
 			'accept-language': args.lang === 'zh' ? 'zh' : 'en',
 			...(body ? { 'Content-Type': 'application/json' } : {})
 		},
@@ -87,6 +106,11 @@ async function api(path, { method = 'GET', body } = {}) {
 	}
 	if (args.verbose) {
 		console.log(`     ${method} ${url} -> ${response.status} ${text.slice(0, 400)}`);
+	}
+	// KV 最终一致会让刚登录的 token 偶发 401，重新登录再来一次
+	if (!retried && data?.code === 401 && args.user && args.password) {
+		await login();
+		return api(path, { method, body }, true);
 	}
 	return { status: response.status, data, text };
 }
@@ -134,7 +158,8 @@ async function runJob(emailId) {
 
 	let payload = data.data;
 	let rounds = 0;
-	while (payload.state === 'running') {
+	// start 之后任务处于 pending，必须由 step 一块一块推进
+	while (payload.state !== 'done' && payload.state !== 'error') {
 		rounds += 1;
 		if (rounds > 400) {
 			return { job: payload, error: { message: 'step 轮询超过 400 轮仍未结束' } };
