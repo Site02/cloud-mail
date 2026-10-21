@@ -31,6 +31,8 @@ const translationPrompt = {
 			'Return exactly one valid JSON object with the shape {"items":[{"id":"the same id","text":"translated plain text"}]}.',
 			'Return every input id exactly once and no other ids.',
 			'Each text must be a string of plain text, not HTML.',
+			'Translate every piece of prose, including headings, button labels, link texts and postal addresses.',
+			'Keep a text unchanged only when it is purely a proper noun, brand, code, file path, URL or email address.',
 			'Write characters of the target language directly; never escape them as \\uXXXX sequences.',
 			'Return no Markdown fences, explanations, or additional keys.'
 		].join(' ');

@@ -123,6 +123,20 @@ function createAi(behavior) {
 					})
 				};
 			}
+			if (behavior === 'keep-first') {
+				// 线上 GitHub 通知邮件：标题整句被原样返回，用户看到的就是没翻译
+				if (isBatch) {
+					return {
+						response: JSON.stringify({
+							items: items.map((item, index) => ({
+								id: item.id,
+								text: index === 0 ? item.text : '[译]' + item.text
+							}))
+						})
+					};
+				}
+				return { response: '[重译]' + payload.messages[1].content };
+			}
 			if (behavior === 'not-json') {
 				return { response: '你好，我是翻译助手。' };
 			}
@@ -267,6 +281,21 @@ describe('translation resilience', () => {
 		expect(done.content).toContain('[译]Hello');
 		// 补译只发生在缺口上：调用数严格大于分块数
 		expect(env.ai.calls.length).toBeGreaterThan(Number(done.progress.total));
+	});
+
+	it('整句被原样返回时单独重译，不留下半中半英', async () => {
+		const content = '<div><p>Cloud check in action: No jobs were run</p><p>Second paragraph here</p></div>';
+		const { c, env } = build({ behavior: 'keep-first', content });
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		const done = await runToEnd(c, service, payload);
+
+		expect(done.state).toBe('done');
+		expect(done.content).toContain('[重译]Cloud check in action: No jobs were run');
+		expect(done.content).toContain('[译]Second paragraph here');
+		// 批量 1 次 + 针对那一句的重译 1 次，已经翻好的不再重发
+		expect(env.ai.calls.length).toBe(2);
 	});
 
 	it('模型完全没按 JSON 契约返回时直接失败，不做补译', async () => {

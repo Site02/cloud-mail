@@ -21,7 +21,7 @@ const translationConst = {
 		TEXT: 'text'
 	},
 	MODEL: '@cf/meta/llama-3.1-8b-instruct-fast',
-	PROMPT_VERSION: 'email-translate-v3',
+	PROMPT_VERSION: 'email-translate-v4',
 	PARSER_VERSION: 'dom-v1',
 	SANITIZER_VERSION: 'safe-dom-v1',
 	// 单块最多承载的文本单元数量；条目越多模型越容易漏项/重复，8 是实测稳定点

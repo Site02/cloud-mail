@@ -240,6 +240,40 @@ const aiService = {
 		return text;
 	},
 
+	// 模型偶尔原样返回整句（线上 GitHub 通知邮件的标题、按钮、地址行就是），
+	// 用户看到的结果就是“翻了个寂寞”：这类条目值得再单独翻一次
+	isUntranslated(item, text) {
+		const source = String(item?.text || '').trim();
+		const output = String(text || '').trim();
+		if (!source || output !== source) {
+			return false;
+		}
+		// 中文没有词边界，按长度判断
+		if (/[\u3400-\u9fff]/.test(source)) {
+			return source.length >= 8;
+		}
+		const words = source.split(/\s+/).filter(word => /\p{L}/u.test(word));
+		if (words.length < 3 || source.length < 12) {
+			return false;
+		}
+		// 全大写的品牌/缩写、纯标识符原样保留是正常的
+		return /\p{Ll}/u.test(source);
+	},
+
+	findUntranslated(items, map) {
+		const ids = new Set();
+		for (const item of items) {
+			const text = map.get(item.id);
+			if (text === undefined) {
+				continue;
+			}
+			if (this.isUntranslated(item, text)) {
+				ids.add(item.id);
+			}
+		}
+		return ids;
+	},
+
 	// 写进译文的最后一道兜底：打转的文本、被改动的数字一律退回原文
 	cleanUnit(item, text) {
 		return this.guardDigits(item, this.guardLoops(item, text));
@@ -352,10 +386,11 @@ const aiService = {
 	},
 
 	// 逐条补译：并行发起，单条失败不影响其它条目，总覆盖面由调用方判定
-	async repairUnits(c, lang, items, model, state) {
-		// 只补缺口：已经拿到的条目不再重发，避免同一条文本被模型计费两次
+	async repairUnits(c, lang, items, model, state, redo = null) {
+		// 只补缺口：已经拿到的条目不再重发，避免同一条文本被模型计费两次；
+		// redo 里的条目是「模型原样返回了原文」，需要覆盖重译
 		const targets = items
-			.filter(item => !state.map.has(item.id))
+			.filter(item => !state.map.has(item.id) || redo?.has(item.id))
 			.slice(0, translationConst.REPAIR_MAX_UNITS);
 		const settled = await Promise.allSettled(targets.map(async item => {
 			const { content } = await this.runModel(
@@ -407,6 +442,7 @@ const aiService = {
 		let batchError = null;
 		// 只有「模型按 JSON 契约回了东西、但漏了几条」才值得补译
 		let canRepair = false;
+		let redo = new Set();
 
 		try {
 			const run = await this.runModel(c, envModel, [
@@ -417,16 +453,20 @@ const aiService = {
 			if (list) {
 				canRepair = true;
 				this.collectItems(list, items, state.map);
-				if (state.map.size === items.length) {
-					return { map: state.map, model: envModel };
-				}
 			}
-			console.error('翻译输出异常', JSON.stringify({
-				...run.meta,
-				want: items.length,
-				got: state.map.size,
-				parsed: !!list
-			}));
+			// 全齐了但仍有整句原样返回：补一次单条翻译，别让用户看到半中半英
+			redo = canRepair ? this.findUntranslated(items, state.map) : new Set();
+			if (state.map.size === items.length && redo.size === 0) {
+				return { map: state.map, model: envModel };
+			}
+			if (state.map.size !== items.length) {
+				console.error('翻译输出异常', JSON.stringify({
+					...run.meta,
+					want: items.length,
+					got: state.map.size,
+					parsed: !!list
+				}));
+			}
 			batchError = new BizError(getT(c)('translationInvalidOutput'), 502, 'translationInvalidOutput');
 		} catch (e) {
 			// 超时与网关异常属于“结果未知”：不补译，避免同一个模型被重复计费
@@ -439,7 +479,7 @@ const aiService = {
 		// 整段不是 JSON 说明模型根本没在工作：这时补译只会把垃圾文本当译文存下来，
 		// 直接把失败抛给调用方，由分块重试或用户重试处理
 		if (canRepair) {
-			await this.repairUnits(c, lang, items, envModel, state);
+			await this.repairUnits(c, lang, items, envModel, state, redo);
 			if (state.map.size === items.length) {
 				return { map: state.map, model: envModel };
 			}
