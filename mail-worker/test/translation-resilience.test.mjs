@@ -99,6 +99,30 @@ function createAi(behavior) {
 				}
 				return { response: '[补译]' + payload.messages[1].content };
 			}
+			if (behavior === 'object-response') {
+				// 新模型会把 JSON 契约解析好直接塞进 response
+				return { response: { items: items.map(item => ({ id: item.id, text: '[译]' + item.text })) } };
+			}
+			if (behavior === 'choices-response') {
+				return {
+					choices: [{
+						message: {
+							content: JSON.stringify({ items: items.map(item => ({ id: item.id, text: '[译]' + item.text })) })
+						}
+					}]
+				};
+			}
+			if (behavior === 'mangled-digits') {
+				// llama 偶尔把 2026-10-21 写成 "2026年1١"（阿拉伯数字混进来）
+				return {
+					response: JSON.stringify({
+						items: items.map(item => ({
+							id: item.id,
+							text: '[译]' + item.text.replace(/2026-10-21/g, '2026年1١')
+						}))
+					})
+				};
+			}
 			if (behavior === 'not-json') {
 				return { response: '你好，我是翻译助手。' };
 			}
@@ -118,7 +142,7 @@ function createAi(behavior) {
 const HTML = '<div><p>Hello <b>world</b></p><p>Second</p></div>';
 
 // withTranslationTables=false 用来复现“生产库没建过翻译表”的状态
-function build({ behavior, withTranslationTables = true, brokenIndex = false } = {}) {
+function build({ behavior, withTranslationTables = true, brokenIndex = false, content = HTML } = {}) {
 	const sqlite = new DatabaseSync(':memory:');
 	sqlite.exec('CREATE TABLE email (email_id INTEGER PRIMARY KEY, account_id INTEGER, user_id INTEGER, content TEXT, text TEXT, is_del INTEGER DEFAULT 0)');
 	sqlite.exec('CREATE TABLE account (account_id INTEGER PRIMARY KEY, user_id INTEGER, is_del INTEGER DEFAULT 0)');
@@ -129,7 +153,7 @@ function build({ behavior, withTranslationTables = true, brokenIndex = false } =
 	}
 	sqlite.exec('INSERT INTO account (account_id, user_id, is_del) VALUES (3, 1, 0)');
 	sqlite.prepare('INSERT INTO email (email_id, account_id, user_id, content, text, is_del) VALUES (7, 3, 1, ?, ?, 0)')
-		.run(HTML, 'Hello world');
+		.run(content, 'Hello world');
 	const env = { db: createD1(sqlite, { brokenIndex }), kv: createKv(), ai: createAi(behavior) };
 	return { c: { env }, sqlite, env };
 }
@@ -173,6 +197,48 @@ describe('translation resilience', () => {
 		const tables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'translation%' OR name = 'email_translation'").all().map(row => row.name);
 		expect(tables).toContain('email_translation');
 		expect(tables).toContain('translation_quota');
+	});
+
+	it('模型把 JSON 解析成对象直接放进 response 时也能翻译', async () => {
+		// Workers AI 的 llama-3.1-8b-fast-v2 会把 JSON 契约直接解析成对象塞进 response，
+		// 老代码只认字符串，导致线上每一封邮件都报“翻译失败”
+		const { c } = build({ behavior: 'object-response' });
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		const done = await runToEnd(c, service, payload);
+
+		expect(done.state).toBe('done');
+		expect(done.content).toContain('[译]Hello');
+	});
+
+	it('数字被模型改动的条目退回原文，不会写错时间', async () => {
+		const { c } = build({
+			behavior: 'mangled-digits',
+			content: '<div><p>Login at 2026-10-21 16:33:14</p><p>Hello world</p></div>'
+		});
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		const done = await runToEnd(c, service, payload);
+
+		expect(done.state).toBe('done');
+		// 整封不因为一个节点错乱而失败，但那个节点必须是原文，不能带阿拉伯数码
+		expect(done.content).not.toContain('1١');
+		expect(done.content).toContain('2026-10-21');
+		// 其他节点照常翻译
+		expect(done.content).toContain('[译]Hello');
+	});
+
+	it('模型只给 OpenAI 风格 choices[0].message.content 时也能翻译', async () => {
+		const { c } = build({ behavior: 'choices-response' });
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		const done = await runToEnd(c, service, payload);
+
+		expect(done.state).toBe('done');
+		expect(done.content).toContain('[译]Hello');
 	});
 
 	it('模型把 JSON 包在围栏和说明文字里也能解析', async () => {

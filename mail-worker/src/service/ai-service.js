@@ -5,6 +5,64 @@ import translationPrompt from '../utils/translation-prompt';
 import BizError from '../error/biz-error';
 import { t, getT } from '../i18n/i18n';
 
+// Workers AI 有两套返回形状：老的 { response } 和 -fast / 新模型的 OpenAI 兼容
+// { choices: [{ message: { content } }] }。线上就是栽在这里：模型 2.5 秒就翻了，
+// 我们按老形状取值取到 undefined，再报一句“AI 翻译结果校验失败”。
+function extractAiText(response) {
+	if (typeof response === 'string') {
+		return response;
+	}
+	if (!response || typeof response !== 'object') {
+		return '';
+	}
+
+	const readContent = content => {
+		if (typeof content === 'string') {
+			return content;
+		}
+		if (Array.isArray(content)) {
+			return content.map(part => readContent(typeof part === 'string' ? part : part?.text)).join('');
+		}
+		// json 模式下模型已经把契约解析成对象，序列化回去交给下游解析器
+		if (content && typeof content === 'object') {
+			try {
+				return JSON.stringify(content);
+			} catch (e) {
+				return '';
+			}
+		}
+		return '';
+	};
+
+	// OpenAI 兼容形状：-fast 系与新模型
+	const choice = Array.isArray(response.choices) ? response.choices[0] : null;
+	const fromChoice = readContent(choice?.message?.content)
+		|| readContent(choice?.text)
+		|| readContent(choice?.delta?.content);
+	if (fromChoice) {
+		return fromChoice;
+	}
+
+	// 老形状
+	for (const key of ['response', 'text', 'output_text']) {
+		const value = readContent(response[key]);
+		if (value) {
+			return value;
+		}
+	}
+
+	// ai.run 可能连 result 信封一起给
+	if (response.result && typeof response.result === 'object') {
+		const nested = readContent(response.result.choices?.[0]?.message?.content)
+			|| readContent(response.result.response);
+		if (nested) {
+			return nested;
+		}
+	}
+
+	return '';
+}
+
 const aiService = {
 	async extractCode(c, email, options = {}) {
 		if (!this.shouldExtractCode(options.aiCode, options.aiCodeFilter, email)) {
@@ -38,7 +96,7 @@ const aiService = {
 				max_tokens: 32
 			});
 
-			const content = typeof result === 'string' ? result : result?.response || '';
+			const content = extractAiText(result);
 			const json = typeof content === 'string' ? JSON.parse(content) : content;
 			if (typeof json.code !== 'string') {
 				return '';
@@ -105,6 +163,17 @@ const aiService = {
 	},
 
 	// 源文有内容却回空白是漏译；长度暴涨说明模型在乱写，两者都不能写进译文
+	// 模型偶尔会把 2026-10-21 写成 "2026年1١"：数字被改动的译文比不译更糟，
+	// 这一条退回原文（宁可一个节点保持原样，也不要把时间、IP 写错）
+	guardDigits(item, text) {
+		const source = (String(item.text).match(/\d/g) || []).join('');
+		const output = (String(text).match(/\d/g) || []).join('');
+		if (source && source !== output) {
+			return String(item.text);
+		}
+		return text;
+	},
+
 	acceptUnit(item, text) {
 		if (typeof text !== 'string') {
 			return false;
@@ -129,7 +198,7 @@ const aiService = {
 			if (!this.acceptUnit(item, row.text)) {
 				continue;
 			}
-			map.set(row.id, row.text);
+			map.set(row.id, this.guardDigits(item, row.text));
 		}
 		return map;
 	},
@@ -139,6 +208,7 @@ const aiService = {
 			throw new BizError(getT(c)('translationAiUnavailable'), 503, 'translationAiUnavailable');
 		}
 
+		const startedAt = Date.now();
 		const runPromise = c.env.ai.run(model, { messages, temperature: 0, max_tokens: 2048 });
 
 		// 超时先返回时，模型 promise 仍可能稍后 reject，这里挂一个兜底避免未处理拒绝
@@ -174,11 +244,30 @@ const aiService = {
 			if (timer) clearTimeout(timer);
 		}
 
-		const content = typeof response === 'string' ? response : response?.response;
-		if (typeof content !== 'string' || !content.trim()) {
+		const content = extractAiText(response);
+		if (!content.trim()) {
+			// 空返回也要把响应形状带出来，否则线上只看到一句“结果校验失败”
+			console.error('模型空返回', JSON.stringify({
+				model,
+				ms: Date.now() - startedAt,
+				shape: response === null ? 'null' : typeof response,
+				keys: response && typeof response === 'object' ? Object.keys(response) : []
+			}));
 			throw new BizError(getT(c)('translationInvalidOutput'), 502, 'translationInvalidOutput');
 		}
-		return content;
+		return {
+			content,
+			// 线上只发 errorKey 无法定位问题：把模型到底回了什么留在日志里，tail 一次就能看
+			meta: {
+				model,
+				ms: Date.now() - startedAt,
+				usage: response?.usage || null,
+				finish: response?.finish_reason || response?.finishReason || response?.finish || null,
+				len: content.length,
+				head: content.slice(0, 320),
+				tail: content.length > 480 ? content.slice(-160) : ''
+			}
+		};
 	},
 
 	cleanUnitOutput(content) {
@@ -198,7 +287,7 @@ const aiService = {
 			.filter(item => !state.map.has(item.id))
 			.slice(0, translationConst.REPAIR_MAX_UNITS);
 		const settled = await Promise.allSettled(targets.map(async item => {
-			const content = await this.runModel(
+			const { content } = await this.runModel(
 				c,
 				model,
 				[
@@ -226,7 +315,7 @@ const aiService = {
 				continue;
 			}
 			if (this.acceptUnit(item, text)) {
-				state.map.set(id, text);
+				state.map.set(id, this.guardDigits(item, text));
 			}
 		}
 		return state;
@@ -249,11 +338,11 @@ const aiService = {
 		let canRepair = false;
 
 		try {
-			const content = await this.runModel(c, envModel, [
+			const run = await this.runModel(c, envModel, [
 				{ role: 'system', content: translationPrompt.system(lang) },
 				{ role: 'user', content: translationPrompt.user(lang, items) }
 			], timeoutMs);
-			const list = this.parseItems(content);
+			const list = this.parseItems(run.content);
 			if (list) {
 				canRepair = true;
 				this.collectItems(list, items, state.map);
@@ -261,6 +350,12 @@ const aiService = {
 					return { map: state.map, model: envModel };
 				}
 			}
+			console.error('翻译输出异常', JSON.stringify({
+				...run.meta,
+				want: items.length,
+				got: state.map.size,
+				parsed: !!list
+			}));
 			batchError = new BizError(getT(c)('translationInvalidOutput'), 502, 'translationInvalidOutput');
 		} catch (e) {
 			// 超时与网关异常属于“结果未知”：不补译，避免同一个模型被重复计费
@@ -285,5 +380,7 @@ const aiService = {
 		throw batchError || new BizError(getT(c)('translationInvalidOutput'), 502, 'translationInvalidOutput');
 	}
 };
+
+aiService.extractText = extractAiText;
 
 export default aiService;

@@ -115,18 +115,21 @@ async function api(path, { method = 'GET', body } = {}, retried = false) {
 	return { status: response.status, data, text };
 }
 
-function cjkRatio(text) {
-	const chars = Array.from(text || '');
-	if (chars.length === 0) return 0;
-	const cjk = chars.filter(ch => /[\u4e00-\u9fff]/.test(ch)).length;
-	return cjk / chars.length;
+// 只看“文字字符”：HTML 标签、style/url、数字和标点都不该稀释语言占比，
+// 否则一封翻译得很好的邮件也会因为标签多而被判成“没翻译”。
+function plainText(html) {
+	return String(html || '')
+		.replace(/<(script|style|head|title)[\s\S]*?<\/\1>/gi, ' ')
+		.replace(/<[^>]*>/g, ' ')
+		.replace(/&[a-z#0-9]{2,8};/gi, ' ');
 }
 
-function asciiRatio(text) {
-	const chars = Array.from(text || '');
-	if (chars.length === 0) return 0;
-	const ascii = chars.filter(ch => /[A-Za-z]/.test(ch)).length;
-	return ascii / chars.length;
+function cjkShare(text) {
+	const chars = Array.from(plainText(text));
+	const cjk = chars.filter(ch => /[\u4e00-\u9fff]/.test(ch)).length;
+	const latin = chars.filter(ch => /[A-Za-z]/.test(ch)).length;
+	const total = cjk + latin;
+	return total === 0 ? 0 : cjk / total;
 }
 
 async function pickEmail() {
@@ -240,20 +243,19 @@ async function main() {
 		fail('格式保留', '译文里没有任何 HTML 标签');
 	}
 
+	const share = cjkShare(text || content);
 	if (args.lang === 'zh') {
-		const ratio = cjkRatio(text || content);
-		if (ratio > 0.1) {
-			pass('目标语言正确', `中文占比 ${(ratio * 100).toFixed(0)}%`);
+		// 登录通知这类邮件会原样保留 UA、IP、用户名，拉丁字母占比很高，
+		// 只要正文有两成以上是中文就足以证明真的翻了（实测这封是 36%）
+		if (share > 0.2) {
+			pass('目标语言正确', `中文占文字字符 ${(share * 100).toFixed(0)}%`);
 		} else {
-			fail('目标语言正确', `中文占比只有 ${(ratio * 100).toFixed(0)}%，可能没有真正翻译`);
+			fail('目标语言正确', `中文只占 ${(share * 100).toFixed(0)}%，可能没有真正翻译`);
 		}
+	} else if (share < 0.15) {
+		pass('目标语言正确', `中文残留 ${(share * 100).toFixed(0)}%，已转成英文`);
 	} else {
-		const ratio = asciiRatio(text || content);
-		if (ratio > 0.3) {
-			pass('目标语言正确', `拉丁字母占比 ${(ratio * 100).toFixed(0)}%`);
-		} else {
-			fail('目标语言正确', `拉丁字母占比只有 ${(ratio * 100).toFixed(0)}%，可能没有真正翻译`);
-		}
+		fail('目标语言正确', `中文残留 ${(share * 100).toFixed(0)}%，可能没有真正翻译`);
 	}
 
 	// 5) 缓存命中（同一封邮件再翻一次应当直接返回缓存）
