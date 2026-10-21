@@ -733,4 +733,28 @@ describe('translation provider chain', () => {
 		const { default: aiService } = await import('../src/service/ai-service.js');
 		expect(aiService.budget(30000, Date.now() + 50)).toBeLessThanOrEqual(50);
 	});
+
+	it('secret 注入的大写变量名也能被识别（配了 key 却退回 Workers AI 的老坑）', async () => {
+		const openai = createOpenAi(({ body }) => openAiOk(JSON.stringify({
+			items: itemsOf(JSON.parse(body.messages[1].content || '{}')).map(item => ({ id: item.id, text: '[Q]' + item.text }))
+		})));
+		const { c, sqlite } = build({
+			vars: {
+				ai_translate_openai_base_url: 'https://api.example.com/v1',
+				// wrangler secret 注入的是大写变量名
+				AI_TRANSLATE_OPENAI_API_KEY: 'sk-upper',
+				ai_translate_openai_model: 'qwen-test',
+				translateFetch: openai.fetchImpl,
+				ai: createAi()
+			}
+		});
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		const done = await runToEnd(c, service, payload);
+
+		expect(done.content).toContain('[Q]Hello');
+		expect(openai.calls[0].headers.Authorization).toBe('Bearer sk-upper');
+		expect(sqlite.prepare('SELECT model FROM email_translation WHERE email_id = 7').get().model).toBe('openai:qwen-test');
+	});
 });

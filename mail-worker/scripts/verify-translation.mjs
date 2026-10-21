@@ -224,6 +224,8 @@ async function main() {
 	}
 	const job = first.job;
 	pass('首次翻译完成', `${first.ms}ms / ${first.rounds} 轮 step / 分块 ${job.progress?.total ?? '?'}`);
+	// 通道写清楚：配了外部通道却静默退回 Workers AI 时，一眼就能看出来
+	pass('翻译通道', job.model || '未标记');
 
 	// 4) 译文内容检查
 	const content = job.content || '';

@@ -313,10 +313,16 @@ const aiService = {
 	},
 
 	// 已经配好凭据、可以用的通道，按优先级排列
+	// wrangler secret 注入的是大写变量名，wrangler.toml 的 var 是小写：
+	// 两个都认，否则「配了 secret 却没生效」会静默退回 Workers AI（线上踩过）
+	openaiKey(c) {
+		return String(c.env?.AI_TRANSLATE_OPENAI_API_KEY || c.env?.ai_translate_openai_api_key || '').trim();
+	},
+
 	availableProviders(c) {
 		const list = [];
 		if (String(c.env?.ai_translate_openai_base_url || '').trim()
-			&& String(c.env?.ai_translate_openai_api_key || '').trim()
+			&& this.openaiKey(c)
 			&& String(c.env?.ai_translate_openai_model || '').trim()) {
 			// OpenAI 兼容端点：硅基流动 / 魔搭 / DeepSeek / Groq / OpenRouter / 自建 one-api 都吃这套
 			list.push('openai');
@@ -621,7 +627,7 @@ const aiService = {
 	// OpenAI 兼容端点（硅基流动 / 魔搭 ModelScope / DeepSeek / Groq / OpenRouter / 自建 one-api）
 	async runOpenAi(c, model, messages, timeoutMs, maxTokens, deadline) {
 		const baseUrl = String(c.env?.ai_translate_openai_base_url || '').trim().replace(/\/+$/, '');
-		const key = String(c.env?.ai_translate_openai_api_key || '').trim();
+		const key = this.openaiKey(c);
 		if (!baseUrl || !key || !model) {
 			const error = new BizError(getT(c)('translationAiUnavailable'), 503, 'translationAiUnavailable');
 			error.detail = 'ai_translate_openai_base_url / api_key / model 未配全';

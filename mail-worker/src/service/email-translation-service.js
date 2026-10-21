@@ -209,6 +209,8 @@ const translationService = {
 			fallback: !!job?.fallback,
 			// 前端要靠它区分「额度用尽」和「AI 出错」，只给一句 message 无法本地化
 			errorKey: job?.error_key || '',
+			// 实际使用的通道:模型，前端和验收脚本都能看到“到底是谁翻的”
+			model: job?.model || '',
 			cached: false
 		};
 		return Object.assign(payload, extra);
