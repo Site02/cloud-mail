@@ -20,7 +20,12 @@ const translationConst = {
 		HTML: 'html',
 		TEXT: 'text'
 	},
+	// Workers AI 通道（兜底通道）用的模型
 	MODEL: '@cf/meta/llama-3.1-8b-instruct-fast',
+	// 主力通道：Gemini 免费档（免信用卡，按项目限 RPM/RPD，比 Workers AI 免费神经元宽松得多）
+	// 注意：切换通道会改变缓存键，同一封邮件换通道要重新翻译一次
+	GEMINI_MODEL: 'gemini-2.5-flash',
+	GEMINI_ENDPOINT: 'https://generativelanguage.googleapis.com/v1beta/models',
 	PROMPT_VERSION: 'email-translate-v4',
 	PARSER_VERSION: 'dom-v1',
 	SANITIZER_VERSION: 'safe-dom-v1',

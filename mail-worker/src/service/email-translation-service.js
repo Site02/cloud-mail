@@ -73,8 +73,9 @@ const translationService = {
 		return row;
 	},
 
+	// 存进任务与缓存键的是「通道:模型」：换主力通道就等于换了译文，缓存必须分开
 	modelOf(c) {
-		return c.env.ai_translate_model || c.env.ai_model || translationConst.MODEL;
+		return aiService.modelRefOf(c);
 	},
 
 	byteLength(text) {

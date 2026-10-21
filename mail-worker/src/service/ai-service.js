@@ -63,6 +63,19 @@ function extractAiText(response) {
 	return '';
 }
 
+// Gemini 的返回是 candidates[0].content.parts[]；带思考的模型会把思考过程塞进
+// thought=true 的 part，那一段不是译文，混进来会直接把 JSON 契约撑坏
+function extractGeminiText(payload) {
+	const parts = payload?.candidates?.[0]?.content?.parts;
+	if (!Array.isArray(parts)) {
+		return '';
+	}
+	return parts
+		.filter(part => part && part.thought !== true && typeof part.text === 'string')
+		.map(part => part.text)
+		.join('');
+}
+
 const aiService = {
 	async extractCode(c, email, options = {}) {
 		if (!this.shouldExtractCode(options.aiCode, options.aiCodeFilter, email)) {
@@ -288,75 +301,282 @@ const aiService = {
 		return map;
 	},
 
-	async runModel(c, model, messages, timeoutMs) {
-		if (!c.env?.ai) {
-			throw new BizError(getT(c)('translationAiUnavailable'), 503, 'translationAiUnavailable');
+	// 通道选择：显式配置 > 配了 Gemini key 就用 Gemini > 退回 Workers AI
+	resolveProvider(c, override) {
+		const raw = String(override || c.env?.ai_translate_provider || 'auto').trim().toLowerCase();
+		if (raw === 'workers-ai' || raw === 'workers') {
+			return 'workers-ai';
 		}
+		if (raw === 'gemini') {
+			return 'gemini';
+		}
+		return String(c.env?.GEMINI_API_KEY || '').trim() ? 'gemini' : 'workers-ai';
+	},
 
-		const startedAt = Date.now();
-		const maxTokens = translationConst.AI_MAX_TOKENS;
+	// 任务里存的是「通道:模型」。缓存键跟着换：不同通道产出的译文不同，
+	// 缓存必须分开，否则换通道后用户拿到的还是上一套译文
+	parseModelRef(ref) {
+		const raw = String(ref || '').trim();
+		const sep = raw.indexOf(':');
+		if (sep <= 0) {
+			return null;
+		}
+		const provider = raw.slice(0, sep);
+		const model = raw.slice(sep + 1);
+		if (!model || (provider !== 'gemini' && provider !== 'workers-ai')) {
+			return null;
+		}
+		return { provider, model };
+	},
+
+	workersModel(c) {
+		return c.env?.ai_translate_model || c.env?.ai_model || translationConst.MODEL;
+	},
+
+	geminiModel(c) {
+		return c.env?.ai_translate_gemini_model || translationConst.GEMINI_MODEL;
+	},
+
+	modelRefOf(c, provider) {
+		const id = provider || this.resolveProvider(c);
+		return `${id}:${id === 'gemini' ? this.geminiModel(c) : this.workersModel(c)}`;
+	},
+
+	modelPlan(c, options = {}) {
+		const ref = this.parseModelRef(options.model);
+		const provider = ref?.provider || this.resolveProvider(c);
+		return {
+			provider,
+			geminiModel: ref?.provider === 'gemini' ? ref.model : this.geminiModel(c),
+			workersModel: ref?.provider === 'workers-ai' ? ref.model : this.workersModel(c)
+		};
+	},
+
+	// 超时/网络中断 = 结果未知：这种失败不能换通道重发，否则同一段文本被翻两遍、计费两遍
+	uncertainError(c, errorKey, code) {
+		const error = new BizError(getT(c)(errorKey), code, errorKey);
+		error.uncertain = true;
+		return error;
+	},
+
+	transportError(c, e) {
+		if (e?.name === 'BizError') {
+			return e;
+		}
+		const detail = String(e?.message || e || '').replace(/\s+/g, ' ').slice(0, 160);
+		const error = this.uncertainError(c, 'translationModelFailed', 502);
+		if (detail) {
+			error.message = `${error.message}（${detail}）`;
+		}
+		return error;
+	},
+
+	// 2.5-flash 默认先“思考”再回答：思考 token 也算在 maxOutputTokens 里，
+	// 长邮件很容易被思考吃光输出预算。翻译是机械任务，默认关掉
+	geminiThinkingBudget(c) {
+		const raw = Number(c.env?.ai_translate_gemini_thinking_budget ?? 0);
+		return Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : 0;
+	},
+
+	async runWorkersAi(c, model, messages, timeoutMs, maxTokens) {
 		const runPromise = c.env.ai.run(model, { messages, temperature: 0, max_tokens: maxTokens });
-
 		// 超时先返回时，模型 promise 仍可能稍后 reject，这里挂一个兜底避免未处理拒绝
 		runPromise.catch(() => {});
 
 		let timer = null;
 		const timeoutPromise = new Promise((resolve, reject) => {
-			timer = setTimeout(() => {
-				const error = new BizError(getT(c)('translationTimeout'), 504, 'translationTimeout');
-				error.uncertain = true;
-				reject(error);
-			}, timeoutMs);
+			timer = setTimeout(() => reject(this.uncertainError(c, 'translationTimeout', 504)), timeoutMs);
 		});
 
 		let response;
 		try {
 			response = await Promise.race([runPromise, timeoutPromise]);
 		} catch (e) {
-			if (e?.name === 'BizError') {
-				throw e;
-			}
-			// 网络/网关层异常属于“模型是否已计费未知”，与超时同等对待，不自动重试；
-			// 但要把上游原话带给运维，否则线上只看到一句“翻译失败，请重试”
-			const detail = String(e?.message || e || '').replace(/\s+/g, ' ').slice(0, 160);
-			const error = new BizError(
-				detail ? `${getT(c)('translationModelFailed')}（${detail}）` : getT(c)('translationModelFailed'),
-				502,
-				'translationModelFailed'
-			);
-			error.uncertain = true;
-			throw error;
+			throw this.transportError(c, e);
 		} finally {
 			if (timer) clearTimeout(timer);
 		}
 
-		const content = extractAiText(response);
+		return {
+			text: extractAiText(response),
+			usage: response?.usage || null,
+			finish: response?.finish_reason || response?.finishReason || response?.finish || null,
+			truncated: Number(response?.usage?.completion_tokens || 0) >= maxTokens,
+			shape: response === null ? 'null' : typeof response,
+			keys: response && typeof response === 'object' ? Object.keys(response) : []
+		};
+	},
+
+	async runGemini(c, model, messages, timeoutMs, maxTokens) {
+		const key = String(c.env?.GEMINI_API_KEY || '').trim();
+		if (!key) {
+			const error = new BizError(getT(c)('translationAiUnavailable'), 503, 'translationAiUnavailable');
+			error.detail = 'GEMINI_API_KEY 未配置';
+			error.fallbackable = true;
+			throw error;
+		}
+
+		// 测试里注入假 fetch；生产就是全局 fetch
+		const doFetch = typeof c.env?.translateFetch === 'function' ? c.env.translateFetch : fetch;
+		const system = messages.filter(row => row.role === 'system').map(row => String(row.content || '')).join('\n');
+		const contents = messages
+			.filter(row => row.role !== 'system')
+			.map(row => ({ role: 'user', parts: [{ text: String(row.content || '') }] }));
+		const url = `${translationConst.GEMINI_ENDPOINT}/${encodeURIComponent(model)}:generateContent`;
+
+		// 批量契约要求纯 JSON：交给 Gemini 的 responseMimeType 强制住，
+		// 省掉「围栏 + 前后解释文字」这一类解析事故；补译是纯文本契约，不能加
+		const wantsJson = /"items"/.test(system);
+		const buildBody = thinking => ({
+			contents,
+			...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+			generationConfig: {
+				temperature: 0,
+				maxOutputTokens: maxTokens,
+				...(wantsJson ? { responseMimeType: 'application/json' } : {}),
+				...(thinking ? { thinkingConfig: { thinkingBudget: this.geminiThinkingBudget(c) } } : {})
+			}
+		});
+
+		let response = null;
+		let bodyText = '';
+		for (let attempt = 0; attempt < 2; attempt++) {
+			response = await this.geminiFetch(c, doFetch, url, key, buildBody(attempt === 0), timeoutMs);
+			bodyText = typeof response.text === 'function' ? await response.text().catch(() => '') : '';
+			// 这个模型版本不认 thinkingConfig 时去掉它重发一次，别把 400 当成翻译失败
+			if (!response.ok && attempt === 0 && response.status === 400 && /thinking/i.test(bodyText)) {
+				continue;
+			}
+			break;
+		}
+
+		let payload = null;
+		try {
+			payload = bodyText ? JSON.parse(bodyText) : null;
+		} catch (e) {
+			payload = null;
+		}
+
+		if (!response.ok) {
+			const detail = String(payload?.error?.message || '').replace(/\s+/g, ' ').slice(0, 160);
+			if (response.status === 429) {
+				const error = new BizError(getT(c)('translationRateLimited'), 429, 'translationRateLimited');
+				error.fallbackable = true;
+				throw error;
+			}
+			const error = new BizError(
+				`${getT(c)('translationModelFailed')}（Gemini ${response.status}${detail ? `：${detail}` : ''}）`,
+				502,
+				'translationModelFailed'
+			);
+			error.fallbackable = true;
+			throw error;
+		}
+
+		const candidate = payload?.candidates?.[0] || null;
+		const finish = candidate?.finishReason || payload?.promptFeedback?.blockReason || null;
+		return {
+			text: extractGeminiText(payload),
+			usage: payload?.usageMetadata || null,
+			finish,
+			truncated: finish === 'MAX_TOKENS' || Number(payload?.usageMetadata?.candidatesTokenCount || 0) >= maxTokens,
+			shape: 'gemini',
+			keys: payload && typeof payload === 'object' ? Object.keys(payload) : []
+		};
+	},
+
+	async geminiFetch(c, doFetch, url, key, body, timeoutMs) {
+		const controller = typeof AbortController === 'function' ? new AbortController() : null;
+		let timer = null;
+		if (controller) {
+			timer = setTimeout(() => controller.abort(), timeoutMs);
+		}
+		try {
+			return await doFetch(url, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'x-goog-api-key': key
+				},
+				body: JSON.stringify(body),
+				signal: controller ? controller.signal : undefined
+			});
+		} catch (e) {
+			// AbortError 是我们自己超时；其它网络错误同样属于“结果未知”
+			throw this.uncertainError(c, e?.name === 'AbortError' ? 'translationTimeout' : 'translationModelFailed', 504);
+		} finally {
+			if (timer) clearTimeout(timer);
+		}
+	},
+
+	modelResult(c, provider, model, result, startedAt, maxTokens) {
+		const content = String(result?.text || '');
 		if (!content.trim()) {
 			// 空返回也要把响应形状带出来，否则线上只看到一句“结果校验失败”
 			console.error('模型空返回', JSON.stringify({
+				provider,
 				model,
 				ms: Date.now() - startedAt,
-				shape: response === null ? 'null' : typeof response,
-				keys: response && typeof response === 'object' ? Object.keys(response) : []
+				shape: result?.shape || null,
+				keys: result?.keys || []
 			}));
-			throw new BizError(getT(c)('translationInvalidOutput'), 502, 'translationInvalidOutput');
+			const error = new BizError(getT(c)('translationInvalidOutput'), 502, 'translationInvalidOutput');
+			// 空返回换另一个通道还有机会
+			error.fallbackable = true;
+			throw error;
 		}
 		return {
 			content,
 			// 线上只发 errorKey 无法定位问题：把模型到底回了什么留在日志里，tail 一次就能看
 			meta: {
+				provider,
 				model,
 				ms: Date.now() - startedAt,
-				usage: response?.usage || null,
+				usage: result?.usage || null,
 				// 输出被截断时模型往往在原地打转，日志里要能一眼看出来
 				maxTokens,
-				truncated: Number(response?.usage?.completion_tokens || 0) >= maxTokens,
-				finish: response?.finish_reason || response?.finishReason || response?.finish || null,
+				truncated: !!result?.truncated,
+				finish: result?.finish || null,
 				len: content.length,
 				head: content.slice(0, 320),
 				tail: content.length > 480 ? content.slice(-160) : ''
 			}
 		};
+	},
+
+	async runModel(c, messages, timeoutMs, plan) {
+		const startedAt = Date.now();
+		const maxTokens = translationConst.AI_MAX_TOKENS;
+		const order = [plan.provider];
+		// 两个通道都是免费额度：主用被限流/5xx/密钥失效时用另一个顶上，
+		// 用户不该因为“主力通道今天被限流”就看到翻译失败
+		if (plan.provider === 'gemini'
+			&& c.env?.ai
+			&& String(c.env?.ai_translate_fallback || '').toLowerCase() !== 'off') {
+			order.push('workers-ai');
+		}
+
+		let lastError = null;
+		for (let i = 0; i < order.length; i++) {
+			const provider = order[i];
+			const model = provider === 'gemini' ? plan.geminiModel : plan.workersModel;
+			try {
+				const result = provider === 'gemini'
+					? await this.runGemini(c, model, messages, timeoutMs, maxTokens)
+					: await this.runWorkersAi(c, model, messages, timeoutMs, maxTokens);
+				return this.modelResult(c, provider, model, result, startedAt, maxTokens);
+			} catch (e) {
+				lastError = e;
+				// 超时/未知结果不换通道；明确的失败（限流、5xx、密钥问题、空返回）才换
+				if (e?.uncertain === true || e?.fallbackable !== true) {
+					throw e;
+				}
+				if (i < order.length - 1) {
+					console.warn('翻译通道切换', provider, '→', order[i + 1], e?.message);
+				}
+			}
+		}
+		throw lastError || new BizError(getT(c)('translationAiUnavailable'), 503, 'translationAiUnavailable');
 	},
 
 	cleanUnitOutput(content) {
@@ -370,7 +590,7 @@ const aiService = {
 	},
 
 	// 逐条补译：并行发起，单条失败不影响其它条目，总覆盖面由调用方判定
-	async repairUnits(c, lang, items, model, state, redo = null) {
+	async repairUnits(c, lang, items, plan, state, redo = null) {
 		// 只补缺口：已经拿到的条目不再重发，避免同一条文本被模型计费两次；
 		// redo 里的条目是「模型原样返回了原文」，需要覆盖重译
 		const targets = items
@@ -379,12 +599,12 @@ const aiService = {
 		const settled = await Promise.allSettled(targets.map(async item => {
 			const { content } = await this.runModel(
 				c,
-				model,
 				[
 					{ role: 'system', content: translationPrompt.unitSystem(lang) },
 					{ role: 'user', content: item.text }
 				],
-				translationConst.REPAIR_TIMEOUT_MS
+				translationConst.REPAIR_TIMEOUT_MS,
+				plan
 			);
 			return [item.id, this.cleanUnitOutput(content)];
 		}));
@@ -412,15 +632,18 @@ const aiService = {
 	},
 
 	async translateBatch(c, lang, items, options = {}) {
-		const envModel = options.model
-			|| c.env?.ai_translate_model || c.env?.ai_model || translationConst.MODEL;
+		const plan = this.modelPlan(c, options);
+		const modelRef = this.modelRefOf(c, plan.provider);
 		const timeoutMs = options.timeoutMs || translationConst.AI_TIMEOUT_MS;
 
-		if (!c.env?.ai) {
+		const ready = plan.provider === 'gemini'
+			? (String(c.env?.GEMINI_API_KEY || '').trim() || c.env?.ai)
+			: c.env?.ai;
+		if (!ready) {
 			throw new BizError(getT(c)('translationAiUnavailable'), 503, 'translationAiUnavailable');
 		}
 		if (!Array.isArray(items) || items.length === 0) {
-			return { map: new Map(), model: envModel };
+			return { map: new Map(), model: modelRef };
 		}
 		const state = { map: new Map(), uncertain: false };
 		let batchError = null;
@@ -429,10 +652,10 @@ const aiService = {
 		let redo = new Set();
 
 		try {
-			const run = await this.runModel(c, envModel, [
+			const run = await this.runModel(c, [
 				{ role: 'system', content: translationPrompt.system(lang) },
 				{ role: 'user', content: translationPrompt.user(lang, items) }
-			], timeoutMs);
+			], timeoutMs, plan);
 			const list = this.parseItems(run.content);
 			if (list) {
 				canRepair = true;
@@ -441,7 +664,7 @@ const aiService = {
 			// 全齐了但仍有整句原样返回：补一次单条翻译，别让用户看到半中半英
 			redo = canRepair ? this.findUntranslated(items, lang, state.map) : new Set();
 			if (state.map.size === items.length && redo.size === 0) {
-				return { map: state.map, model: envModel };
+				return { map: state.map, model: modelRef };
 			}
 			if (state.map.size !== items.length) {
 				console.error('翻译输出异常', JSON.stringify({
@@ -463,9 +686,9 @@ const aiService = {
 		// 整段不是 JSON 说明模型根本没在工作：这时补译只会把垃圾文本当译文存下来，
 		// 直接把失败抛给调用方，由分块重试或用户重试处理
 		if (canRepair) {
-			await this.repairUnits(c, lang, items, envModel, state, redo);
+			await this.repairUnits(c, lang, items, plan, state, redo);
 			if (state.map.size === items.length) {
-				return { map: state.map, model: envModel };
+				return { map: state.map, model: modelRef };
 			}
 		}
 
@@ -477,5 +700,6 @@ const aiService = {
 };
 
 aiService.extractText = extractAiText;
+aiService.extractGeminiText = extractGeminiText;
 
 export default aiService;
