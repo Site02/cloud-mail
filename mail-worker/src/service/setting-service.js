@@ -202,7 +202,7 @@ const settingService = {
 			addEmailVerify: settingRow.addEmailVerify,
 			registerVerify: settingRow.registerVerify,
 			send: settingRow.send,
-			r2Domain: settingRow.r2Domain,
+			r2Domain: '',
 			siteKey: settingRow.siteKey,
 			background: settingRow.background,
 			loginOpacity: settingRow.loginOpacity,

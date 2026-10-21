@@ -59,6 +59,7 @@ const userService = {
 	async resetPassword(c, params, userId) {
 
 		const { password } = params;
+		if (typeof password !== 'string' || password.length > 128) throw new BizError('Invalid password', 400);
 
 		if (password.length < 6) {
 			throw new BizError(t('pwdMinLength'));

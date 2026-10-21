@@ -24,6 +24,7 @@ const jwtUtils = {
 
 		const fullPayload = {
 			...payload,
+			ver: c.env.session_version || 'security-v1',
 			iat: now,
 			...(exp ? { exp } : {})
 		};
@@ -47,6 +48,7 @@ const jwtUtils = {
 	},
 
 	async verifyToken(c, token) {
+		if (typeof token !== 'string') return null;
 		try {
 			const [headerB64, payloadB64, signatureB64] = token.split('.');
 
@@ -72,6 +74,7 @@ const jwtUtils = {
 
 			const payloadJson = decoder.decode(base64urlDecode(payloadB64));
 			const payload = JSON.parse(payloadJson);
+			if (payload.ver !== (c.env.session_version || 'security-v1')) return null;
 
 			const now = Math.floor(Date.now() / 1000);
 			if (payload.exp && payload.exp < now) return null;

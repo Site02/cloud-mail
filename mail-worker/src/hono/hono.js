@@ -4,7 +4,7 @@ const app = new Hono();
 import result from '../model/result';
 import { cors } from 'hono/cors';
 
-app.use('*', cors());
+app.use('*', cors({ origin: (origin, c) => origin === new URL(c.req.url).origin ? origin : undefined }));
 
 app.onError((err, c) => {
 	if (err.name === 'BizError') {
@@ -29,7 +29,8 @@ app.onError((err, c) => {
 		return c.json(result.fail('请按照文档更新数据库<br/>Please update the database as documented',502));
 	}
 
-	return c.json(result.fail(err.message, err.code));
+	const code = err.name === 'BizError' && Number.isInteger(err.code) && err.code >= 400 && err.code <= 599 ? err.code : 500;
+	return c.json(result.fail(err.name === 'BizError' ? err.message : 'Internal server error', code), code);
 });
 
 export default app;

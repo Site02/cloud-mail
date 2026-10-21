@@ -7,21 +7,21 @@ import userService from '../service/user-service';
 import permService from '../service/perm-service';
 import { t } from '../i18n/i18n'
 import app from '../hono/hono';
+import { getCookie, setCookie } from 'hono/cookie';
 
 const exclude = [
 	'/login',
 	'/register',
-	'/oss',
 	'/setting/websiteConfig',
 	'/webhooks',
 	'/init',
-	'/public/genToken',
 	'/telegram',
 	'/test',
 	'/oauth'
 ];
 
 const requirePerms = [
+	'/role/selectUse',
 	'/email/send',
 	'/email/delete',
 	'/account/list',
@@ -70,7 +70,7 @@ const premKey = {
 	'my:delete': ['/my/delete'],
 	'role:add': ['/role/add'],
 	'role:set': ['/role/set','/role/setDefault'],
-	'role:query': ['/role/list', '/role/tree'],
+	'role:query': ['/role/list', '/role/tree', '/role/selectUse'],
 	'role:delete': ['/role/delete'],
 	'user:query': ['/user/list','/user/allAccount'],
 	'user:add': ['/user/add'],
@@ -92,27 +92,26 @@ const premKey = {
 app.use('*', async (c, next) => {
 
 	const path = c.req.path;
+	const matches = (prefix) => path === prefix || path.startsWith(prefix + '/');
+	const objectRequest = matches('/oss');
+	if (objectRequest && /^\/oss\/static\/background\/[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+$/.test(path)) {
+		return next();
+	}
+	// The legacy token grants instance-wide access. Retire it, including token minting.
+	if (matches('/public')) {
+		throw new BizError('Legacy public API disabled; use authenticated user APIs', 403);
+	}
 
 	const index = exclude.findIndex(item => {
-		return path.startsWith(item);
+		return matches(item);
 	});
 
 	if (index > -1) {
 		return await next();
 	}
 
-	if (path.startsWith('/public')) {
-
-		const userPublicToken = await c.env.kv.get(KvConst.PUBLIC_KEY);
-		const publicToken = c.req.header(constant.TOKEN_HEADER);
-		if (publicToken !== userPublicToken) {
-			throw new BizError(t('publicTokenFail'), 401);
-		}
-		return await next();
-	}
-
-
-	const jwt = c.req.header(constant.TOKEN_HEADER);
+	const jwt = c.req.header(constant.TOKEN_HEADER) ||
+		(objectRequest && ['GET', 'HEAD'].includes(c.req.method) ? getCookie(c, '__Host-mail-session') : undefined);
 
 	const result = await jwtUtils.verifyToken(c, jwt);
 
@@ -132,7 +131,7 @@ app.use('*', async (c, next) => {
 	}
 
 	const permIndex = requirePerms.findIndex(item => {
-		return path.startsWith(item);
+		return matches(item);
 	});
 
 	if (permIndex > -1) {
@@ -142,7 +141,7 @@ app.use('*', async (c, next) => {
 		const userPaths = permKeyToPaths(permKeys);
 
 		const userPermIndex = userPaths.findIndex(item => {
-			return path.startsWith(item);
+			return matches(item);
 		});
 
 		if (userPermIndex === -1 && authInfo.user.email !== c.env.admin) {
@@ -161,6 +160,13 @@ app.use('*', async (c, next) => {
 	}
 
 	c.set('user',authInfo.user)
+	delete authInfo.user.password;
+	delete authInfo.user.salt;
+	if (c.req.header(constant.TOKEN_HEADER) && new URL(c.req.url).protocol === 'https:') {
+		setCookie(c, '__Host-mail-session', jwt, {
+			httpOnly: true, secure: true, sameSite: 'Strict', path: '/', maxAge: constant.TOKEN_EXPIRE,
+		});
+	}
 
 	return await next();
 });
