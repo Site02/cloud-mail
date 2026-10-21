@@ -159,10 +159,76 @@ const aiService = {
 				// 换下一种候选继续解析
 			}
 		}
-		return null;
+		// 模型撞上 max_tokens 时 JSON 会在半截被截断（线上就是这样：8 条只回了 6 条，
+		// 后面开始循环重复直到 token 用尽），整段解析必然失败。这里把已经完整的
+		// {"id":...,"text":...} 对象捞出来，剩下的缺口交给逐条补译，别把整块判死。
+		return this.salvageItems(text);
+	},
+
+	// 从被截断的 JSON 里逐个捞出完整的对象；对象内部的字符串里允许出现花括号，
+	// 所以按「字符串外才算括号」来配对
+	salvageItems(text) {
+		const found = [];
+		let depth = 0;
+		let start = -1;
+		let inString = false;
+		let escaped = false;
+		for (let i = 0; i < text.length; i++) {
+			const ch = text[i];
+			if (inString) {
+				if (escaped) {
+					escaped = false;
+				} else if (ch === '\\') {
+					escaped = true;
+				} else if (ch === '"') {
+					inString = false;
+				}
+				continue;
+			}
+			if (ch === '"') {
+				inString = true;
+				continue;
+			}
+			if (ch === '{') {
+				if (depth === 0) {
+					start = i;
+				}
+				depth++;
+				continue;
+			}
+			if (ch === '}' && depth > 0) {
+				depth--;
+				if (depth === 0 && start > -1) {
+					const slice = text.slice(start, i + 1);
+					start = -1;
+					if (!slice.includes('"id"') || !slice.includes('"text"')) {
+						continue;
+					}
+					try {
+						const row = JSON.parse(slice);
+						if (row && typeof row.id === 'string' && typeof row.text === 'string') {
+							found.push(row);
+						}
+					} catch (e) {
+						// 这个对象本身也不完整，跳过
+					}
+				}
+			}
+		}
+		return found.length > 0 ? found : null;
 	},
 
 	// 源文有内容却回空白是漏译；长度暴涨说明模型在乱写，两者都不能写进译文
+
+	// 8B 模型偶发原地打转（线上整整 2755 个字符全是“为一个为一个…”）：
+	// 这种文本没有翻译价值，退回原文
+	guardLoops(item, text) {
+		if (/(.{2,12})\1{4,}/.test(String(text))) {
+			return String(item.text);
+		}
+		return text;
+	},
+
 	// 模型偶尔会把 2026-10-21 写成 "2026年1١"：数字被改动的译文比不译更糟，
 	// 这一条退回原文（宁可一个节点保持原样，也不要把时间、IP 写错）
 	guardDigits(item, text) {
@@ -172,6 +238,11 @@ const aiService = {
 			return String(item.text);
 		}
 		return text;
+	},
+
+	// 写进译文的最后一道兜底：打转的文本、被改动的数字一律退回原文
+	cleanUnit(item, text) {
+		return this.guardDigits(item, this.guardLoops(item, text));
 	},
 
 	acceptUnit(item, text) {
@@ -198,7 +269,7 @@ const aiService = {
 			if (!this.acceptUnit(item, row.text)) {
 				continue;
 			}
-			map.set(row.id, this.guardDigits(item, row.text));
+			map.set(row.id, this.cleanUnit(item, row.text));
 		}
 		return map;
 	},
@@ -315,7 +386,7 @@ const aiService = {
 				continue;
 			}
 			if (this.acceptUnit(item, text)) {
-				state.map.set(id, this.guardDigits(item, text));
+				state.map.set(id, this.cleanUnit(item, text));
 			}
 		}
 		return state;

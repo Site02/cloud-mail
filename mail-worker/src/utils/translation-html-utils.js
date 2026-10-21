@@ -133,6 +133,31 @@ const translationHtmlUtils = {
 	// 严格按文档顺序（前序）产出文本单元。
 	// 逆序扫描会让 <p>Start<b>mid</b>end</p> 变成 end/Start/mid：
 	// HTML 回填位置不受影响，但模型上下文和纯文本回退都会错序。
+	// URL、邮箱、路径、版本号、代码标识符和纯符号片段交给 8B 模型只会被改写，
+	// 线上还出现过整批 token 全在打转（“为一个为一个…”）：这些片段直接照抄，不进分块也不计费
+	isTranslatable(text) {
+		const value = String(text || '').trim();
+		if (!value) {
+			return false;
+		}
+		// 没有任何字母：纯数字、标点、分隔符
+		if (!/\p{L}/u.test(value)) {
+			return false;
+		}
+		if (/^(?:https?:\/\/|www\.)\S+$/iu.test(value)) {
+			return false;
+		}
+		if (/^\S+@\S+\.\S+$/u.test(value)) {
+			return false;
+		}
+		// 不含空格且带分隔符的「标识符样」短串：package-lock.json、CVE-2026-6733、
+		// v6.24.0、a@b.com。带分隔符才算标识符——Line1、t0 这类普通词仍要翻译
+		if (!/\s/.test(value) && /^[\w.@/:-]+$/u.test(value) && /[._/@:-]/u.test(value)) {
+			return false;
+		}
+		return true;
+	},
+
 	extractUnits(document) {
 		const units = [];
 		let index = 0;
@@ -192,11 +217,11 @@ const translationHtmlUtils = {
 		for (const unit of units) {
 			if (unit.parts) {
 				for (const part of unit.parts) {
-					if (part.text) {
+					if (part.text && this.isTranslatable(part.text)) {
 						items.push({ id: part.id, text: part.text });
 					}
 				}
-			} else {
+			} else if (this.isTranslatable(unit.text)) {
 				items.push({ id: unit.id, text: unit.text });
 			}
 		}
@@ -332,9 +357,9 @@ const translationHtmlUtils = {
 		for (const unit of units) {
 			if (unit.parts) {
 				for (const part of unit.parts) {
-					if (part.text) items.push({ id: part.id, text: part.text });
+					if (part.text && this.isTranslatable(part.text)) items.push({ id: part.id, text: part.text });
 				}
-			} else {
+			} else if (this.isTranslatable(unit.text)) {
 				items.push({ id: unit.id, text: unit.text });
 			}
 		}

@@ -31,6 +31,7 @@ const translationPrompt = {
 			'Return exactly one valid JSON object with the shape {"items":[{"id":"the same id","text":"translated plain text"}]}.',
 			'Return every input id exactly once and no other ids.',
 			'Each text must be a string of plain text, not HTML.',
+			'Write characters of the target language directly; never escape them as \\uXXXX sequences.',
 			'Return no Markdown fences, explanations, or additional keys.'
 		].join(' ');
 	},
@@ -46,6 +47,7 @@ const translationPrompt = {
 			'Keep names, usernames, IP addresses, device strings and code-like tokens exactly as written.',
 			'Keep text already in the target language unchanged.',
 			'Preserve newline characters.',
+			'Write characters of the target language directly; never escape them as \\uXXXX sequences.',
 			'Return only the translated plain text: no quotes, no JSON, no Markdown fences, no explanations.'
 		].join(' ');
 	},

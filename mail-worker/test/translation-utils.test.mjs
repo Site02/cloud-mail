@@ -118,4 +118,23 @@ describe('translation-html-utils', () => {
 
 		expect(translationHtmlUtils.toPlainTranslation(units, map)).toBe('甲\n乙');
 	});
+	it('纯符号、路径、版本号不进模型分块', () => {
+		// 线上 8B 模型拿到这些片段后开始原地打转，把整批 token 烧光
+		const html = '<div><p>&gt;</p><p>6.24.0</p><p>package-lock.json</p>'
+			+ '<p>https://github.com/puyujian/Cloud189Checkin/actions/runs/1</p>'
+			+ '<p>someone@example.com</p><p>CVE-2026-6733</p><p>Hello world, please review.</p></div>';
+		const doc = translationHtmlUtils.parse(html);
+		translationHtmlUtils.sanitize(doc);
+		const units = translationHtmlUtils.extractUnits(doc);
+		const items = translationHtmlUtils.buildChunks(units).flat();
+
+		expect(items.map(item => item.text)).toEqual(['Hello world, please review.']);
+		// 被跳过的片段在回填时保持原样
+		const map = new Map([[items[0].id, '你好世界，请复核。']]);
+		translationHtmlUtils.applyTranslations(units, map);
+		const out = translationHtmlUtils.serialize(doc);
+		expect(out).toContain('6.24.0');
+		expect(out).toContain('package-lock.json');
+		expect(out).toContain('你好世界，请复核。');
+	});
 });
