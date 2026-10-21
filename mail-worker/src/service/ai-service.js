@@ -227,11 +227,24 @@ const aiService = {
 		return /\p{Ll}/u.test(source);
 	},
 
-	findUntranslated(items, map) {
+	// 源文本来就已经是目标语言时（界面语言是英文、去翻一封英文邮件），
+	// 「原样返回」是正确结果，再补译一次只会白白多烧一倍神经元
+	alreadyTargetLang(item, lang) {
+		const text = String(item?.text || '');
+		const cjk = (text.match(/[\u3400-\u9fff]/g) || []).length;
+		const letters = (text.match(/\p{L}/gu) || []).length || 1;
+		const share = cjk / letters;
+		return String(lang) === 'zh' ? share > 0.3 : share < 0.05;
+	},
+
+	findUntranslated(items, lang, map) {
 		const ids = new Set();
 		for (const item of items) {
 			const text = map.get(item.id);
 			if (text === undefined) {
+				continue;
+			}
+			if (this.alreadyTargetLang(item, lang)) {
 				continue;
 			}
 			if (this.isUntranslated(item, text)) {
@@ -426,7 +439,7 @@ const aiService = {
 				this.collectItems(list, items, state.map);
 			}
 			// 全齐了但仍有整句原样返回：补一次单条翻译，别让用户看到半中半英
-			redo = canRepair ? this.findUntranslated(items, state.map) : new Set();
+			redo = canRepair ? this.findUntranslated(items, lang, state.map) : new Set();
 			if (state.map.size === items.length && redo.size === 0) {
 				return { map: state.map, model: envModel };
 			}

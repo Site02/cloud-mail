@@ -361,6 +361,21 @@ describe('translation resilience', () => {
 		expect(env.ai.calls.length).toBeGreaterThan(0);
 	});
 
+	it('源文已经是目标语言时不会为「原样返回」再烧一遍模型', async () => {
+		const content = '<div><p>Cloud check in action: No jobs were run</p><p>Second paragraph here</p></div>';
+		const { c, env } = build({ behavior: 'keep-first', content });
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		// 界面语言是英文、目标语言也是英文：原样返回就是正确结果
+		const payload = await service.start(c, { emailId: 7, targetLang: 'en' }, 1);
+		const done = await runToEnd(c, service, payload);
+
+		expect(done.state).toBe('done');
+		expect(done.content).toContain('Cloud check in action: No jobs were run');
+		// 只有那一次批量调用
+		expect(env.ai.calls.length).toBe(1);
+	});
+
 	it('模型完全没按 JSON 契约返回时直接失败，不做补译', async () => {
 		const { c, env } = build({ behavior: 'not-json' });
 		const { default: service } = await import('../src/service/email-translation-service.js');
