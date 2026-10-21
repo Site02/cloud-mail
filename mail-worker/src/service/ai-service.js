@@ -267,6 +267,15 @@ const aiService = {
 		return ids;
 	},
 
+	// 剩余预算内的实际超时：整轮共用一条预算，别让每块各自 30s 叠成分钟级
+	budget(timeoutMs, deadline) {
+		const left = deadline - Date.now();
+		if (left <= 0) {
+			return 0;
+		}
+		return Math.max(1000, Math.min(timeoutMs, left));
+	},
+
 	// 写进译文的最后一道兜底：打转的文本、被改动的数字一律退回原文
 	cleanUnit(item, text) {
 		return this.guardDigits(item, this.guardLoops(item, text));
@@ -348,16 +357,19 @@ const aiService = {
 	// 缓存必须分开，否则换通道后用户拿到的还是上一套译文
 	parseModelRef(ref) {
 		const raw = String(ref || '').trim();
+		if (!raw) {
+			return null;
+		}
+		const known = ['gemini', 'workers-ai', 'openai'];
 		const sep = raw.indexOf(':');
-		if (sep <= 0) {
-			return null;
+		const head = sep > 0 ? raw.slice(0, sep) : '';
+		if (known.includes(head)) {
+			const model = raw.slice(sep + 1);
+			return model ? { provider: head, model } : null;
 		}
-		const provider = raw.slice(0, sep);
-		const model = raw.slice(sep + 1);
-		if (!model || (provider !== 'gemini' && provider !== 'workers-ai' && provider !== 'openai')) {
-			return null;
-		}
-		return { provider, model };
+		// 历史任务里存的是裸模型名（那时还没有通道概念）：一律按 Workers AI 解释。
+		// 否则在途任务会被悄悄换成新主力通道，把别人的译文写进旧缓存键
+		return { provider: 'workers-ai', model: raw };
 	},
 
 	workersModel(c) {
@@ -444,7 +456,16 @@ const aiService = {
 		try {
 			response = await Promise.race([runPromise, timeoutPromise]);
 		} catch (e) {
-			throw this.transportError(c, e);
+			if (e?.name === 'BizError') {
+				throw e;
+			}
+			const mapped = this.transportError(c, e);
+			// 限流/配额这类“明确拒绝”可以换通道顶上；真正的传输未知不行
+			if (/429|rate.?limit|neurons|quota|capacity/i.test(String(e?.message || ''))) {
+				mapped.uncertain = false;
+				mapped.fallbackable = true;
+			}
+			throw mapped;
 		} finally {
 			if (timer) clearTimeout(timer);
 		}
@@ -493,8 +514,7 @@ const aiService = {
 		let response = null;
 		let bodyText = '';
 		for (let attempt = 0; attempt < 2; attempt++) {
-			response = await this.postJson(c, doFetch, url, { 'x-goog-api-key': key }, buildBody(attempt === 0), timeoutMs);
-			bodyText = typeof response.text === 'function' ? await response.text().catch(() => '') : '';
+			({ response, bodyText } = await this.postJson(c, doFetch, url, { 'x-goog-api-key': key }, buildBody(attempt === 0), timeoutMs));
 			// 这个模型版本不认 thinkingConfig 时去掉它重发一次，别把 400 当成翻译失败
 			if (!response.ok && attempt === 0 && response.status === 400 && /thinking/i.test(bodyText)) {
 				continue;
@@ -545,13 +565,26 @@ const aiService = {
 			timer = setTimeout(() => controller.abort(), timeoutMs);
 		}
 		try {
-			return await doFetch(url, {
+			const response = await doFetch(url, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', ...headers },
 				body: JSON.stringify(body),
 				signal: controller ? controller.signal : undefined
 			});
+			// 响应头比正文先到是常态：正文读取也必须留在同一个超时窗口里，
+			// 否则“收到头就撤计时器”等于让请求无限等下去
+			let bodyText = '';
+			try {
+				bodyText = typeof response.text === 'function' ? await response.text() : '';
+			} catch (e) {
+				// 正文读不出来 = 不知道模型到底执没执行，属于结果未知，不许换通道重发
+				throw this.uncertainError(c, 'translationModelFailed', 504);
+			}
+			return { response, bodyText };
 		} catch (e) {
+			if (e?.name === 'BizError') {
+				throw e;
+			}
 			// AbortError 是我们自己超时；其它网络错误同样属于“结果未知”
 			throw this.uncertainError(c, e?.name === 'AbortError' ? 'translationTimeout' : 'translationModelFailed', 504);
 		} finally {
@@ -586,8 +619,7 @@ const aiService = {
 		let response = null;
 		let bodyText = '';
 		for (let attempt = 0; attempt < 2; attempt++) {
-			response = await this.postJson(c, doFetch, url, { Authorization: `Bearer ${key}` }, buildBody(wantsJson && attempt === 0), timeoutMs);
-			bodyText = typeof response.text === 'function' ? await response.text().catch(() => '') : '';
+			({ response, bodyText } = await this.postJson(c, doFetch, url, { Authorization: `Bearer ${key}` }, buildBody(wantsJson && attempt === 0), timeoutMs));
 			// 有的兼容端点不认 response_format，去掉它重发一次，别把 400 当成翻译失败
 			if (!response.ok && attempt === 0 && response.status === 400 && /response_format|json_object|max_tokens/i.test(bodyText)) {
 				continue;
@@ -665,6 +697,19 @@ const aiService = {
 		};
 	},
 
+	// 返回结果时带上“这块到底是谁翻的”：主力通道之外还混进了兜底通道时，
+	// 上游调用方不能把它当成主力通道的成果写进可复用缓存
+	batchResult(plan, modelRef, state) {
+		const used = Array.from(state.providers || []);
+		const provider = used.length === 1 ? used[0] : plan.provider;
+		return {
+			map: state.map,
+			model: modelRef,
+			provider,
+			mixed: used.some(id => id !== plan.provider)
+		};
+	},
+
 	callProvider(c, provider, model, messages, timeoutMs, maxTokens) {
 		if (provider === 'gemini') {
 			return this.runGemini(c, model, messages, timeoutMs, maxTokens);
@@ -716,22 +761,27 @@ const aiService = {
 	},
 
 	// 逐条补译：并行发起，单条失败不影响其它条目，总覆盖面由调用方判定
-	async repairUnits(c, lang, items, plan, state, redo = null) {
+	async repairUnits(c, lang, items, plan, state, redo = null, deadline = Number.MAX_SAFE_INTEGER) {
 		// 只补缺口：已经拿到的条目不再重发，避免同一条文本被模型计费两次；
 		// redo 里的条目是「模型原样返回了原文」，需要覆盖重译
 		const targets = items
 			.filter(item => !state.map.has(item.id) || redo?.has(item.id))
 			.slice(0, translationConst.REPAIR_MAX_UNITS);
+		const slice = this.budget(translationConst.REPAIR_TIMEOUT_MS, deadline);
+		if (!targets.length || slice <= 0) {
+			return state;
+		}
 		const settled = await Promise.allSettled(targets.map(async item => {
-			const { content } = await this.runModel(
+			const { content, meta } = await this.runModel(
 				c,
 				[
 					{ role: 'system', content: translationPrompt.unitSystem(lang) },
 					{ role: 'user', content: item.text }
 				],
-				translationConst.REPAIR_TIMEOUT_MS,
+				this.budget(translationConst.REPAIR_TIMEOUT_MS, deadline),
 				plan
 			);
+			state.providers.add(meta.provider);
 			return [item.id, this.cleanUnitOutput(content)];
 		}));
 
@@ -761,15 +811,18 @@ const aiService = {
 		const plan = this.modelPlan(c, options);
 		const modelRef = this.modelRefOf(c, plan.provider);
 		const timeoutMs = options.timeoutMs || translationConst.AI_TIMEOUT_MS;
+		// 整轮预算：批量 + 补译共享，避免「每块每次都限时」叠起来超过前端超时
+		const deadline = Date.now() + translationConst.AI_BATCH_BUDGET_MS;
 
 		// 一条通道都没配才算真的不可用；单条通道缺凭据由它自己抛 fallbackable 错误交给回退
 		if (this.availableProviders(c).length === 0) {
 			throw new BizError(getT(c)('translationAiUnavailable'), 503, 'translationAiUnavailable');
 		}
 		if (!Array.isArray(items) || items.length === 0) {
-			return { map: new Map(), model: modelRef };
+			return { map: new Map(), model: modelRef, provider: plan.provider };
 		}
-		const state = { map: new Map(), uncertain: false };
+		// providers 记录这一块实际用到的通道：兜底产物不能当成主力通道的结果缓存
+		const state = { map: new Map(), uncertain: false, providers: new Set() };
 		let batchError = null;
 		// 只有「模型按 JSON 契约回了东西、但漏了几条」才值得补译
 		let canRepair = false;
@@ -779,7 +832,8 @@ const aiService = {
 			const run = await this.runModel(c, [
 				{ role: 'system', content: translationPrompt.system(lang) },
 				{ role: 'user', content: translationPrompt.user(lang, items) }
-			], timeoutMs, plan);
+			], this.budget(timeoutMs, deadline), plan);
+			state.providers.add(run.meta.provider);
 			const list = this.parseItems(run.content);
 			if (list) {
 				canRepair = true;
@@ -788,7 +842,7 @@ const aiService = {
 			// 全齐了但仍有整句原样返回：补一次单条翻译，别让用户看到半中半英
 			redo = canRepair ? this.findUntranslated(items, lang, state.map) : new Set();
 			if (state.map.size === items.length && redo.size === 0) {
-				return { map: state.map, model: modelRef };
+				return this.batchResult(plan, modelRef, state);
 			}
 			if (state.map.size !== items.length) {
 				console.error('翻译输出异常', JSON.stringify({
@@ -810,9 +864,9 @@ const aiService = {
 		// 整段不是 JSON 说明模型根本没在工作：这时补译只会把垃圾文本当译文存下来，
 		// 直接把失败抛给调用方，由分块重试或用户重试处理
 		if (canRepair) {
-			await this.repairUnits(c, lang, items, plan, state, redo);
+			await this.repairUnits(c, lang, items, plan, state, redo, deadline);
 			if (state.map.size === items.length) {
-				return { map: state.map, model: modelRef };
+				return this.batchResult(plan, modelRef, state);
 			}
 		}
 

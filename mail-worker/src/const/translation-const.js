@@ -50,6 +50,9 @@ const translationConst = {
 	AI_TIMEOUT_MS: 30 * 1000,
 	// llama 把中文写成 \uXXXX 转义时一个汉字要烧 2~3 个 token，2048 很容易被一封长邮件打满
 	AI_MAX_TOKENS: 4096,
+	// 单次 step 的总预算：批量 + 补译共享它。前端 70s 超时、分块租约 120s，
+	// 不设总预算的话「每块每次限时 30s」叠起来能拖到分钟级，用户先看到前端超时
+	AI_BATCH_BUDGET_MS: 60 * 1000,
 	// 批量 JSON 契约失败时，逐条用纯文本契约补译的上限与单条超时：
 	// 漏项比整块作废便宜得多，但不允许无限重发
 	REPAIR_MAX_UNITS: 8,

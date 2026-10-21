@@ -61,12 +61,19 @@ function createKv() {
 }
 
 // Workers AI 兜底通道的假实现：译文前缀用 [护]，一眼能看出是谁翻的
-function createAi() {
+// bad=true 模拟模型完全不按 JSON 契约返回；boom=true 模拟上游明确拒绝（限流）
+function createAi({ bad = false, boom = null } = {}) {
 	const calls = [];
 	return {
 		calls,
 		async run(model, payload) {
 			calls.push({ model, payload });
+			if (boom) {
+				throw new Error(boom);
+			}
+			if (bad) {
+				return { response: '你好，我是翻译助手。' };
+			}
 			const items = itemsOf(JSON.parse(payload.messages[1].content || '{}'));
 			if (!items.length) {
 				return { response: '[护]' + payload.messages[1].content };
@@ -410,5 +417,156 @@ describe('translation provider chain', () => {
 			errorKey: 'translationAiUnavailable',
 			code: 503
 		});
+	});
+
+	it('响应体读不出来属于结果未知，不换通道重发', async () => {
+		// 只拿到响应头、正文断流：不知道模型到底执行没执行，换通道等于再翻一遍、再计费一遍
+		const calls = [];
+		const brokenFetch = async (url, init) => {
+			calls.push({ url, body: JSON.parse(init.body) });
+			return {
+				ok: true,
+				status: 200,
+				text: async () => {
+					throw new Error('socket hang up');
+				}
+			};
+		};
+		const ai = createAi();
+		const { c } = build({ vars: { GEMINI_API_KEY: 'test-key', translateFetch: brokenFetch, ai } });
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		await expect(service.step(c, { jobId: payload.jobId }, 1)).rejects.toMatchObject({
+			errorKey: 'translationModelFailed'
+		});
+		expect(calls.length).toBe(1);
+		expect(ai.calls.length).toBe(0);
+	});
+
+	it('历史任务里的裸模型名按 Workers AI 解释，不会被换成新主力通道', async () => {
+		const openai = createOpenAi(() => openAiOk('{"items":[]}'));
+		const ai = createAi();
+		const { c } = build({
+			vars: {
+				ai_translate_openai_base_url: 'https://api.example.com/v1',
+				ai_translate_openai_api_key: 'sk-test',
+				ai_translate_openai_model: 'qwen-test',
+				translateFetch: openai.fetchImpl,
+				ai
+			}
+		});
+		const { default: aiService } = await import('../src/service/ai-service.js');
+
+		// 部署时还没有通道概念的老任务，存的就是裸模型名
+		const result = await aiService.translateBatch(c, 'zh', [{ id: 'u1', text: 'Hello' }], {
+			model: '@cf/meta/llama-3.1-8b-instruct-fast'
+		});
+
+		expect(ai.calls.length).toBeGreaterThan(0);
+		expect(ai.calls[0].model).toBe('@cf/meta/llama-3.1-8b-instruct-fast');
+		expect(openai.calls.length).toBe(0);
+		expect(result.model).toBe('workers-ai:@cf/meta/llama-3.1-8b-instruct-fast');
+	});
+
+	it('分块重试用尽时当次就判死并退回额度，不等下一次 step', async () => {
+		const ai = createAi({ bad: true });
+		const { c, sqlite } = build({ vars: { ai } });
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		expect(sqlite.prepare('SELECT jobs FROM translation_quota WHERE user_id = 1').get().jobs).toBe(1);
+
+		// 前端报错就停手，只会走到第 3 次失败
+		for (let i = 0; i < 3; i++) {
+			try {
+				await service.step(c, { jobId: payload.jobId }, 1);
+			} catch (e) {
+				// 前两次是分块失败，第三次用完重试次数
+			}
+		}
+
+		expect(sqlite.prepare('SELECT jobs, codepoints FROM translation_quota WHERE user_id = 1').get())
+			.toMatchObject({ jobs: 0, codepoints: 0 });
+		const job = sqlite.prepare('SELECT state FROM email_translation WHERE email_id = 7').get();
+		expect(job.state).toBe('error');
+	});
+
+	it('Workers AI 明确限流时反向回退到已配置的 HTTP 通道', async () => {
+		const ai = createAi({ boom: '429 rate limit exceeded for this account' });
+		const openai = createOpenAi(({ body }) => openAiOk(JSON.stringify({
+			items: itemsOf(JSON.parse(body.messages[1].content || '{}')).map(item => ({ id: item.id, text: '[Q]' + item.text }))
+		})));
+		const { c } = build({
+			vars: {
+				ai_translate_provider: 'workers-ai',
+				ai_translate_openai_base_url: 'https://api.example.com/v1',
+				ai_translate_openai_api_key: 'sk-test',
+				ai_translate_openai_model: 'qwen-test',
+				translateFetch: openai.fetchImpl,
+				ai
+			}
+		});
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		const done = await runToEnd(c, service, payload);
+
+		expect(done.state).toBe('done');
+		expect(done.content).toContain('[Q]Hello');
+		expect(ai.calls.length).toBeGreaterThan(0);
+		expect(openai.calls.length).toBeGreaterThan(0);
+	});
+
+	it('兜底通道产出的译文不会写进可复用的 KV 缓存', async () => {
+		const openai = createOpenAi(() => ({ status: 429, payload: { error: { message: 'rate limited' } } }));
+		const ai = createAi();
+		const { c, env } = build({
+			vars: {
+				ai_translate_openai_base_url: 'https://api.example.com/v1',
+				ai_translate_openai_api_key: 'sk-test',
+				ai_translate_openai_model: 'qwen-test',
+				translateFetch: openai.fetchImpl,
+				ai
+			}
+		});
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		const done = await runToEnd(c, service, payload);
+
+		expect(done.state).toBe('done');
+		expect(done.content).toContain('[护]Hello');
+		// 主力是 Qwen，译文却来自 Workers AI：不能留在主力通道的缓存键下
+		expect(env.kv.store.size).toBe(0);
+	});
+
+	it('跨日退款不会扣掉今天的用量', async () => {
+		const ai = createAi({ bad: true });
+		const { c, sqlite } = build({ vars: { ai } });
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		// 造一个“昨天建的、今天才判死”的任务：额度记账在昨天
+		const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+		const day = yesterday.toLocaleDateString('en-CA');
+		sqlite.prepare('INSERT INTO translation_quota (user_id, day, jobs, codepoints) VALUES (1, ?, 1, 500)').run(day);
+		sqlite.prepare('UPDATE email_translation SET created_time = ? WHERE email_id = 7').run(yesterday.getTime());
+
+		for (let i = 0; i < 3; i++) {
+			try {
+				await service.step(c, { jobId: payload.jobId }, 1);
+			} catch (e) {
+				// 重试逐次耗尽
+			}
+		}
+
+		// 昨天那笔退回，今天的用量不受影响
+		const past = sqlite.prepare('SELECT jobs, codepoints FROM translation_quota WHERE day = ?').get(day);
+		const todayRow = sqlite.prepare('SELECT jobs FROM translation_quota WHERE day = ?')
+			.get(new Date().toLocaleDateString('en-CA'));
+		// 退回的是这一封实际占用的字符数（Hello world + Second = 16），只动昨天那一行
+		expect(past).toMatchObject({ jobs: 0, codepoints: 500 - 16 });
+		expect(todayRow.jobs).toBe(1);
 	});
 });

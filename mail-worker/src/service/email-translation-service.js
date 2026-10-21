@@ -43,11 +43,14 @@ const translationLimits = {
 	}
 };
 
-function today(timeZone = 'Asia/Shanghai') {
+// 「今日」必须与登录/注册的每日额度用同一个时区（北京时间），
+// 否则 UTC 切日会让提示里的“明天 0 点恢复”变成早上 8 点
+// at: 退款要退到任务原来记账的那一天，不能用“现在”去扣今天的用量
+function today(timeZone = 'Asia/Shanghai', at = Date.now()) {
 	try {
-		return new Date().toLocaleDateString('en-CA', { timeZone });
+		return new Date(at).toLocaleDateString('en-CA', { timeZone });
 	} catch (e) {
-		return new Date().toISOString().slice(0, 10);
+		return new Date(at).toISOString().slice(0, 10);
 	}
 }
 
@@ -220,6 +223,8 @@ const translationService = {
 		const lang = this.resolveLang(c, params.targetLang);
 		const row = await this.readableEmail(c, emailId, userId);
 		const plan = await this.buildPlan(c, row, lang);
+		// 这一封要扣的字符数：建任务时扣、判死时退，两处必须用同一个数
+		const charged = plan.units.reduce((sum, unit) => sum + Array.from(unit.text).length, 0);
 		const model = this.modelOf(c);
 		const cacheKey = await this.cacheKey(userId, emailId, plan, lang, model);
 
@@ -232,6 +237,8 @@ const translationService = {
 		// 过期任务不可复用，否则前端拿着它 step 会直接 404
 		if (existing && Number(existing.expire_time || 0) > 0
 			&& Number(existing.expire_time) < Date.now()) {
+			// 没跑完就过期的任务，额度还挂在账上：删之前先退
+			await this.failJob(c, existing, 'translationJobExpired', userId, charged);
 			await translationRepository.deleteJob(c, existing.job_id);
 			existing = null;
 		}
@@ -248,6 +255,7 @@ const translationService = {
 			const exhausted = await translationRepository.countExhausted(c, existing.job_id, now);
 			const inflight = await translationRepository.countInflight(c, existing.job_id, now);
 			if (claimable === 0 && exhausted > 0 && inflight === 0) {
+				await this.failJob(c, existing, 'translationModelFailed', userId, charged);
 				await translationRepository.deleteJob(c, existing.job_id);
 				existing = null;
 			}
@@ -271,7 +279,7 @@ const translationService = {
 			throw new BizError(getT(c)('translationRateLimited'), 429, 'translationRateLimited');
 		}
 
-		const codepoints = plan.units.reduce((sum, unit) => sum + Array.from(unit.text).length, 0);
+		const codepoints = charged;
 		const day = today();
 
 		// 先原子预占配额，再建任务：避免“先建任务后扣额度”期间任务已被 step 消费
@@ -436,7 +444,8 @@ const translationService = {
 		try {
 			// 用任务上固化的模型名，避免部署期间切换模型导致结果写入错误的缓存键
 			const result = await aiService.translateBatch(c, job.target_lang, items, { model: job.model });
-			const json = JSON.stringify(Array.from(result.map.entries()));
+			// 记下这块实际用的通道：混进兜底通道时不能冒充主力通道的成果
+			const json = JSON.stringify({ p: result.provider || '', e: Array.from(result.map.entries()) });
 			const ok = await translationRepository.finishChunk(
 				c, chunk.id, owner, json, translationConst.CHUNK_STATUS.DONE
 			);
@@ -446,8 +455,15 @@ const translationService = {
 		} catch (e) {
 			// 超时/网关错误属于“结果未知”，不自动重试（可能已产生模型计费）
 			const retryable = e?.uncertain !== true;
+			const errorKey = e?.errorKey || 'translationModelFailed';
 			await translationRepository.releaseChunk(c, chunk.id, owner, retryable);
-			await translationRepository.updateJobState(c, jobId, STATE.RUNNING, { error_key: e?.errorKey || 'translationModelFailed' });
+			await translationRepository.updateJobState(c, jobId, STATE.RUNNING, { error_key: errorKey });
+			// 前端一报错就停止 step，不会再打第四次请求：重试用尽必须在这一轮就判死并退额度，
+			// 否则用户点“重试”时旧任务还挂在 running，当天的额度也不会退（线上就是这么吃满 20 次的）
+			const exhausted = await translationRepository.countExhausted(c, jobId, now);
+			if (exhausted > 0) {
+				await this.failJob(c, job, errorKey, userId, charged);
+			}
 			throw e;
 		}
 
@@ -471,7 +487,8 @@ const translationService = {
 	async failJob(c, job, errorKey, userId, charged) {
 		const first = await translationRepository.markJobErrorOnce(c, job.job_id, errorKey);
 		if (first && charged > 0) {
-			await translationRepository.releaseQuota(c, userId, today(), charged);
+			// 退到任务原来记账的那一天：跨日退款不该把今天的用量也扣掉
+			await translationRepository.releaseQuota(c, userId, today('Asia/Shanghai', Number(job.created_time) || Date.now()), charged);
 		}
 		return first;
 	},
@@ -479,11 +496,15 @@ const translationService = {
 	async finalize(c, job, plan, userId) {
 		const rows = await translationRepository.selectChunks(c, job.job_id);
 		const map = new Map();
+		const providers = new Set();
 		for (const row of rows) {
 			if (row.status !== translationConst.CHUNK_STATUS.DONE || !row.result_json) continue;
 			let entries = [];
 			try {
-				entries = JSON.parse(row.result_json);
+				const parsed = JSON.parse(row.result_json);
+				// 老任务存的是纯数组，新任务存 { p: 通道, e: 条目 }
+				entries = Array.isArray(parsed) ? parsed : (parsed?.e || []);
+				if (parsed?.p) providers.add(parsed.p);
 			} catch (e) {
 				entries = [];
 			}
@@ -531,8 +552,14 @@ const translationService = {
 
 		const fresh = await translationRepository.selectJob(c, job.job_id, userId);
 		const payload = this.toPayload(fresh);
-		if (won) {
+		// 主力通道之外混进了兜底通道的译文时，不写 7 天可复用的 KV 缓存：
+		// 否则下次会用主力通道的键命中一套别家的译文
+		const primary = String(job.model || '').split(':')[0];
+		const mixed = Array.from(providers).some(id => id && id !== primary);
+		if (won && !mixed) {
 			await this.writeKv(c, userId, job.cache_key, payload);
+		} else if (won && mixed) {
+			console.warn('翻译使用了兜底通道，跳过 KV 缓存', JSON.stringify({ jobId: job.job_id, primary, providers: Array.from(providers) }));
 		}
 		return Object.assign({}, payload, { cached: !won });
 	}
