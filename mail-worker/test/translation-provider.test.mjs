@@ -78,6 +78,33 @@ function createAi() {
 	};
 }
 
+// 假的 OpenAI 兼容端点：/chat/completions 的形状
+function createOpenAi(handler) {
+	const calls = [];
+	const fetchImpl = async (url, init) => {
+		const body = JSON.parse(init.body);
+		const call = { url, headers: init.headers, body };
+		calls.push(call);
+		const out = await handler({ body, call, calls });
+		const status = out.status === undefined ? 200 : out.status;
+		return {
+			ok: status >= 200 && status < 300,
+			status,
+			text: async () => JSON.stringify(out.payload ?? {})
+		};
+	};
+	return { calls, fetchImpl };
+}
+
+function openAiOk(text) {
+	return {
+		payload: {
+			choices: [{ message: { role: 'assistant', content: text }, finish_reason: 'stop' }],
+			usage: { prompt_tokens: 40, completion_tokens: 12, total_tokens: 52 }
+		}
+	};
+}
+
 // 假 Gemini 端点：返回形状与 generativelanguage.googleapis.com 完全一致
 function createGemini(handler) {
 	const calls = [];
@@ -290,5 +317,98 @@ describe('translation provider chain', () => {
 		expect(gemini.calls.length).toBe(0);
 		expect(sqlite.prepare('SELECT model FROM email_translation WHERE email_id = 7').get().model)
 			.toBe('workers-ai:@cf/meta/llama-3.1-8b-instruct-fast');
+	});
+
+	it('配了 OpenAI 兼容端点就走它，优先于 Workers AI', async () => {
+		const openai = createOpenAi(({ body }) => openAiOk(JSON.stringify({
+			items: itemsOf(JSON.parse(body.messages[1].content || '{}')).map(item => ({ id: item.id, text: '[Q]' + item.text }))
+		})));
+		const { c, sqlite } = build({
+			vars: {
+				ai_translate_openai_base_url: 'https://api.example.com/v1',
+				ai_translate_openai_api_key: 'sk-test',
+				ai_translate_openai_model: 'qwen-test',
+				translateFetch: openai.fetchImpl,
+				ai: createAi()
+			}
+		});
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		const done = await runToEnd(c, service, payload);
+
+		expect(done.state).toBe('done');
+		expect(done.content).toContain('[Q]Hello');
+		expect(done.content).not.toContain('[护]');
+
+		const call = openai.calls[0];
+		expect(call.url).toBe('https://api.example.com/v1/chat/completions');
+		expect(call.headers.Authorization).toBe('Bearer sk-test');
+		expect(call.body.model).toBe('qwen-test');
+		expect(call.body.temperature).toBe(0);
+		expect(call.body.response_format).toEqual({ type: 'json_object' });
+		expect(sqlite.prepare('SELECT model FROM email_translation WHERE email_id = 7').get().model).toBe('openai:qwen-test');
+	});
+
+	it('兼容端点不认 response_format 时去掉它重发一次', async () => {
+		const openai = createOpenAi(({ body, calls }) => {
+			if (calls.length === 1) {
+				return { status: 400, payload: { error: { message: 'response_format is not supported' } } };
+			}
+			return openAiOk(JSON.stringify({
+				items: itemsOf(JSON.parse(body.messages[1].content || '{}')).map(item => ({ id: item.id, text: '[Q]' + item.text }))
+			}));
+		});
+		const { c } = build({
+			vars: {
+				ai_translate_openai_base_url: 'https://api.example.com/v1',
+				ai_translate_openai_api_key: 'sk-test',
+				ai_translate_openai_model: 'qwen-test',
+				translateFetch: openai.fetchImpl,
+				ai: createAi()
+			}
+		});
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		const done = await runToEnd(c, service, payload);
+
+		expect(done.state).toBe('done');
+		expect(done.content).toContain('[Q]Hello');
+		expect(openai.calls[0].body.response_format).toBeTruthy();
+		expect(openai.calls[1].body.response_format).toBeUndefined();
+	});
+
+	it('兼容端点 429 时退回 Workers AI', async () => {
+		const openai = createOpenAi(() => ({ status: 429, payload: { error: { message: 'rate limited' } } }));
+		const ai = createAi();
+		const { c } = build({
+			vars: {
+				ai_translate_openai_base_url: 'https://api.example.com/v1',
+				ai_translate_openai_api_key: 'sk-test',
+				ai_translate_openai_model: 'qwen-test',
+				translateFetch: openai.fetchImpl,
+				ai
+			}
+		});
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		const done = await runToEnd(c, service, payload);
+
+		expect(done.state).toBe('done');
+		expect(done.content).toContain('[护]Hello');
+		expect(ai.calls.length).toBeGreaterThan(0);
+	});
+
+	it('一条通道都没配时报“AI 翻译服务暂不可用”', async () => {
+		const { c } = build();
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		await expect(service.step(c, { jobId: payload.jobId }, 1)).rejects.toMatchObject({
+			errorKey: 'translationAiUnavailable',
+			code: 503
+		});
 	});
 });

@@ -301,16 +301,47 @@ const aiService = {
 		return map;
 	},
 
-	// 通道选择：显式配置 > 配了 Gemini key 就用 Gemini > 退回 Workers AI
+	// 已经配好凭据、可以用的通道，按优先级排列
+	availableProviders(c) {
+		const list = [];
+		if (String(c.env?.ai_translate_openai_base_url || '').trim()
+			&& String(c.env?.ai_translate_openai_api_key || '').trim()
+			&& String(c.env?.ai_translate_openai_model || '').trim()) {
+			// OpenAI 兼容端点：硅基流动 / 魔搭 / DeepSeek / Groq / OpenRouter / 自建 one-api 都吃这套
+			list.push('openai');
+		}
+		if (String(c.env?.GEMINI_API_KEY || '').trim()) {
+			list.push('gemini');
+		}
+		if (c.env?.ai) {
+			list.push('workers-ai');
+		}
+		return list;
+	},
+
+	// 通道选择：显式配置 > 按优先级挑第一个可用的 > Workers AI
 	resolveProvider(c, override) {
 		const raw = String(override || c.env?.ai_translate_provider || 'auto').trim().toLowerCase();
 		if (raw === 'workers-ai' || raw === 'workers') {
 			return 'workers-ai';
 		}
-		if (raw === 'gemini') {
-			return 'gemini';
+		if (raw === 'gemini' || raw === 'openai') {
+			return raw;
 		}
-		return String(c.env?.GEMINI_API_KEY || '').trim() ? 'gemini' : 'workers-ai';
+		return this.availableProviders(c)[0] || 'workers-ai';
+	},
+
+	// 主用挂了换成谁：最多补一个备用通道，避免「回退 × 分块重试 × 补译」叠成重试风暴
+	providerChain(c, primary) {
+		const chain = [primary];
+		if (String(c.env?.ai_translate_fallback || '').toLowerCase() === 'off') {
+			return chain;
+		}
+		const backup = this.availableProviders(c).find(id => id !== primary);
+		if (backup) {
+			chain.push(backup);
+		}
+		return chain;
 	},
 
 	// 任务里存的是「通道:模型」。缓存键跟着换：不同通道产出的译文不同，
@@ -323,7 +354,7 @@ const aiService = {
 		}
 		const provider = raw.slice(0, sep);
 		const model = raw.slice(sep + 1);
-		if (!model || (provider !== 'gemini' && provider !== 'workers-ai')) {
+		if (!model || (provider !== 'gemini' && provider !== 'workers-ai' && provider !== 'openai')) {
 			return null;
 		}
 		return { provider, model };
@@ -337,9 +368,28 @@ const aiService = {
 		return c.env?.ai_translate_gemini_model || translationConst.GEMINI_MODEL;
 	},
 
+	openaiModel(c) {
+		return String(c.env?.ai_translate_openai_model || '').trim();
+	},
+
+	// 每条通道各自用的模型名：任务里存的是「通道:模型」，所以回退时也能还原对方的模型
+	modelOfProvider(c, provider, ref) {
+		if (ref?.provider === provider) {
+			return ref.model;
+		}
+		if (provider === 'gemini') {
+			return this.geminiModel(c);
+		}
+		if (provider === 'openai') {
+			return this.openaiModel(c);
+		}
+		return this.workersModel(c);
+	},
+
 	modelRefOf(c, provider) {
 		const id = provider || this.resolveProvider(c);
-		return `${id}:${id === 'gemini' ? this.geminiModel(c) : this.workersModel(c)}`;
+		const model = this.modelOfProvider(c, id, null);
+		return `${id}:${model || 'unset'}`;
 	},
 
 	modelPlan(c, options = {}) {
@@ -347,8 +397,10 @@ const aiService = {
 		const provider = ref?.provider || this.resolveProvider(c);
 		return {
 			provider,
-			geminiModel: ref?.provider === 'gemini' ? ref.model : this.geminiModel(c),
-			workersModel: ref?.provider === 'workers-ai' ? ref.model : this.workersModel(c)
+			// 计划里三条通道的模型名都带上，回退时直接取用，不用重新推断
+			openaiModel: this.modelOfProvider(c, 'openai', ref),
+			geminiModel: this.modelOfProvider(c, 'gemini', ref),
+			workersModel: this.modelOfProvider(c, 'workers-ai', ref)
 		};
 	},
 
@@ -441,7 +493,7 @@ const aiService = {
 		let response = null;
 		let bodyText = '';
 		for (let attempt = 0; attempt < 2; attempt++) {
-			response = await this.geminiFetch(c, doFetch, url, key, buildBody(attempt === 0), timeoutMs);
+			response = await this.postJson(c, doFetch, url, { 'x-goog-api-key': key }, buildBody(attempt === 0), timeoutMs);
 			bodyText = typeof response.text === 'function' ? await response.text().catch(() => '') : '';
 			// 这个模型版本不认 thinkingConfig 时去掉它重发一次，别把 400 当成翻译失败
 			if (!response.ok && attempt === 0 && response.status === 400 && /thinking/i.test(bodyText)) {
@@ -485,7 +537,8 @@ const aiService = {
 		};
 	},
 
-	async geminiFetch(c, doFetch, url, key, body, timeoutMs) {
+	// 两个 HTTP 通道共用的 POST：统一超时 + 超时语义
+	async postJson(c, doFetch, url, headers, body, timeoutMs) {
 		const controller = typeof AbortController === 'function' ? new AbortController() : null;
 		let timer = null;
 		if (controller) {
@@ -494,10 +547,7 @@ const aiService = {
 		try {
 			return await doFetch(url, {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'x-goog-api-key': key
-				},
+				headers: { 'Content-Type': 'application/json', ...headers },
 				body: JSON.stringify(body),
 				signal: controller ? controller.signal : undefined
 			});
@@ -507,6 +557,77 @@ const aiService = {
 		} finally {
 			if (timer) clearTimeout(timer);
 		}
+	},
+
+	// OpenAI 兼容端点（硅基流动 / 魔搭 ModelScope / DeepSeek / Groq / OpenRouter / 自建 one-api）
+	async runOpenAi(c, model, messages, timeoutMs, maxTokens) {
+		const baseUrl = String(c.env?.ai_translate_openai_base_url || '').trim().replace(/\/+$/, '');
+		const key = String(c.env?.ai_translate_openai_api_key || '').trim();
+		if (!baseUrl || !key || !model) {
+			const error = new BizError(getT(c)('translationAiUnavailable'), 503, 'translationAiUnavailable');
+			error.detail = 'ai_translate_openai_base_url / api_key / model 未配全';
+			error.fallbackable = true;
+			throw error;
+		}
+
+		const doFetch = typeof c.env?.translateFetch === 'function' ? c.env.translateFetch : fetch;
+		const system = messages.filter(row => row.role === 'system').map(row => String(row.content || '')).join('\n');
+		const wantsJson = /"items"/.test(system);
+		const url = /\/chat\/completions$/.test(baseUrl) ? baseUrl : `${baseUrl}/chat/completions`;
+		const buildBody = jsonMode => ({
+			model,
+			messages: messages.map(row => ({ role: row.role, content: String(row.content || '') })),
+			temperature: 0,
+			max_tokens: maxTokens,
+			stream: false,
+			...(jsonMode ? { response_format: { type: 'json_object' } } : {})
+		});
+
+		let response = null;
+		let bodyText = '';
+		for (let attempt = 0; attempt < 2; attempt++) {
+			response = await this.postJson(c, doFetch, url, { Authorization: `Bearer ${key}` }, buildBody(wantsJson && attempt === 0), timeoutMs);
+			bodyText = typeof response.text === 'function' ? await response.text().catch(() => '') : '';
+			// 有的兼容端点不认 response_format，去掉它重发一次，别把 400 当成翻译失败
+			if (!response.ok && attempt === 0 && response.status === 400 && /response_format|json_object|max_tokens/i.test(bodyText)) {
+				continue;
+			}
+			break;
+		}
+
+		let payload = null;
+		try {
+			payload = bodyText ? JSON.parse(bodyText) : null;
+		} catch (e) {
+			payload = null;
+		}
+
+		if (!response.ok) {
+			const detail = String(payload?.error?.message || '').replace(/\s+/g, ' ').slice(0, 160);
+			if (response.status === 429) {
+				const error = new BizError(getT(c)('translationRateLimited'), 429, 'translationRateLimited');
+				error.fallbackable = true;
+				throw error;
+			}
+			const error = new BizError(
+				`${getT(c)('translationModelFailed')}（${response.status}${detail ? `：${detail}` : ''}）`,
+				502,
+				'translationModelFailed'
+			);
+			error.fallbackable = true;
+			throw error;
+		}
+
+		const usage = payload?.usage || null;
+		const finish = payload?.choices?.[0]?.finish_reason || payload?.finish_reason || null;
+		return {
+			text: extractAiText(payload),
+			usage,
+			finish,
+			truncated: finish === 'length' || Number(usage?.completion_tokens || 0) >= maxTokens,
+			shape: 'openai',
+			keys: payload && typeof payload === 'object' ? Object.keys(payload) : []
+		};
 	},
 
 	modelResult(c, provider, model, result, startedAt, maxTokens) {
@@ -544,26 +665,31 @@ const aiService = {
 		};
 	},
 
+	callProvider(c, provider, model, messages, timeoutMs, maxTokens) {
+		if (provider === 'gemini') {
+			return this.runGemini(c, model, messages, timeoutMs, maxTokens);
+		}
+		if (provider === 'openai') {
+			return this.runOpenAi(c, model, messages, timeoutMs, maxTokens);
+		}
+		return this.runWorkersAi(c, model, messages, timeoutMs, maxTokens);
+	},
+
 	async runModel(c, messages, timeoutMs, plan) {
 		const startedAt = Date.now();
 		const maxTokens = translationConst.AI_MAX_TOKENS;
-		const order = [plan.provider];
-		// 两个通道都是免费额度：主用被限流/5xx/密钥失效时用另一个顶上，
+		// 主用通道被限流/5xx/密钥失效时用另一个顶上，
 		// 用户不该因为“主力通道今天被限流”就看到翻译失败
-		if (plan.provider === 'gemini'
-			&& c.env?.ai
-			&& String(c.env?.ai_translate_fallback || '').toLowerCase() !== 'off') {
-			order.push('workers-ai');
-		}
+		const order = this.providerChain(c, plan.provider);
 
 		let lastError = null;
 		for (let i = 0; i < order.length; i++) {
 			const provider = order[i];
-			const model = provider === 'gemini' ? plan.geminiModel : plan.workersModel;
+			const model = provider === 'gemini'
+				? plan.geminiModel
+				: provider === 'openai' ? plan.openaiModel : plan.workersModel;
 			try {
-				const result = provider === 'gemini'
-					? await this.runGemini(c, model, messages, timeoutMs, maxTokens)
-					: await this.runWorkersAi(c, model, messages, timeoutMs, maxTokens);
+				const result = await this.callProvider(c, provider, model, messages, timeoutMs, maxTokens);
 				return this.modelResult(c, provider, model, result, startedAt, maxTokens);
 			} catch (e) {
 				lastError = e;
@@ -636,10 +762,8 @@ const aiService = {
 		const modelRef = this.modelRefOf(c, plan.provider);
 		const timeoutMs = options.timeoutMs || translationConst.AI_TIMEOUT_MS;
 
-		const ready = plan.provider === 'gemini'
-			? (String(c.env?.GEMINI_API_KEY || '').trim() || c.env?.ai)
-			: c.env?.ai;
-		if (!ready) {
+		// 一条通道都没配才算真的不可用；单条通道缺凭据由它自己抛 fallbackable 错误交给回退
+		if (this.availableProviders(c).length === 0) {
 			throw new BizError(getT(c)('translationAiUnavailable'), 503, 'translationAiUnavailable');
 		}
 		if (!Array.isArray(items) || items.length === 0) {
