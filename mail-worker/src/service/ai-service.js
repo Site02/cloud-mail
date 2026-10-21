@@ -605,7 +605,7 @@ const aiService = {
 
 		const doFetch = typeof c.env?.translateFetch === 'function' ? c.env.translateFetch : fetch;
 		const system = messages.filter(row => row.role === 'system').map(row => String(row.content || '')).join('\n');
-		const wantsJson = /"items"/.test(system);
+		const wantsJson = /"items"/.test(system) && String(c.env?.ai_translate_openai_json_mode || '').toLowerCase() === 'on';
 		const url = /\/chat\/completions$/.test(baseUrl) ? baseUrl : `${baseUrl}/chat/completions`;
 		const buildBody = jsonMode => ({
 			model,

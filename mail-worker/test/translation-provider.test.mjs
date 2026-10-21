@@ -335,6 +335,7 @@ describe('translation provider chain', () => {
 				ai_translate_openai_base_url: 'https://api.example.com/v1',
 				ai_translate_openai_api_key: 'sk-test',
 				ai_translate_openai_model: 'qwen-test',
+				ai_translate_openai_json_mode: 'on',
 				translateFetch: openai.fetchImpl,
 				ai: createAi()
 			}
@@ -353,6 +354,7 @@ describe('translation provider chain', () => {
 		expect(call.headers.Authorization).toBe('Bearer sk-test');
 		expect(call.body.model).toBe('qwen-test');
 		expect(call.body.temperature).toBe(0);
+		// json_mode 默认关：实测 OpenAI 兼容中继端点对 response_format 会直接 400 或明显变慢
 		expect(call.body.response_format).toEqual({ type: 'json_object' });
 		expect(sqlite.prepare('SELECT model FROM email_translation WHERE email_id = 7').get().model).toBe('openai:qwen-test');
 	});
@@ -371,6 +373,7 @@ describe('translation provider chain', () => {
 				ai_translate_openai_base_url: 'https://api.example.com/v1',
 				ai_translate_openai_api_key: 'sk-test',
 				ai_translate_openai_model: 'qwen-test',
+				ai_translate_openai_json_mode: 'on',
 				translateFetch: openai.fetchImpl,
 				ai: createAi()
 			}
