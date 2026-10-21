@@ -137,6 +137,16 @@ function createAi(behavior) {
 				}
 				return { response: '[重译]' + payload.messages[1].content };
 			}
+			if (behavior === 'truncated') {
+				// 撞上 max_tokens：JSON 半截断掉，后面开始原地打转
+				if (isBatch) {
+					const built = items.slice(0, -1)
+						.map(item => JSON.stringify({ id: item.id, text: '[译]' + item.text }))
+						.join(',');
+					return { response: '{"items":[' + built + ',{"id":"' + items[items.length - 1].id + '","text":"\u4e07\u4e07' };
+				}
+				return { response: '[补译]' + payload.messages[1].content };
+			}
 			if (behavior === 'not-json') {
 				return { response: '你好，我是翻译助手。' };
 			}
@@ -295,6 +305,22 @@ describe('translation resilience', () => {
 		expect(done.content).toContain('[重译]Cloud check in action: No jobs were run');
 		expect(done.content).toContain('[译]Second paragraph here');
 		// 批量 1 次 + 针对那一句的重译 1 次，已经翻好的不再重发
+		expect(env.ai.calls.length).toBe(2);
+	});
+
+	it('输出被 max_tokens 截断时，完整的条目照收，缺口交给补译', async () => {
+		const { c, env } = build({ behavior: 'truncated' });
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		const done = await runToEnd(c, service, payload);
+
+		expect(done.state).toBe('done');
+		// 半截的那条不能被当译文写进去
+		expect(done.content).not.toContain('万万');
+		expect(done.content).toContain('[译]Hello');
+		expect(done.content).toContain('[补译]Second');
+		// 批量 1 次 + 只补缺口（1 条）
 		expect(env.ai.calls.length).toBe(2);
 	});
 

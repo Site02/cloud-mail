@@ -42,6 +42,8 @@ const translationConst = {
 	MAX_CHUNKS: 48,
 	// 单次模型调用等待上限（毫秒）；超时属于结果未知，不自动重发
 	AI_TIMEOUT_MS: 20 * 1000,
+	// llama 把中文写成 \uXXXX 转义时一个汉字要烧 2~3 个 token，2048 很容易被一封长邮件打满
+	AI_MAX_TOKENS: 4096,
 	// 批量 JSON 契约失败时，逐条用纯文本契约补译的上限与单条超时：
 	// 漏项比整块作废便宜得多，但不允许无限重发
 	REPAIR_MAX_UNITS: 8,

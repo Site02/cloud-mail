@@ -165,54 +165,21 @@ const aiService = {
 		return this.salvageItems(text);
 	},
 
-	// 从被截断的 JSON 里逐个捞出完整的对象；对象内部的字符串里允许出现花括号，
-	// 所以按「字符串外才算括号」来配对
+	// 从被截断的 JSON 里逐个捞出完整的 {"id":…,"text":…} 对。
+	// 截断时外层的 {"items":[ 根本没闭合，所以不能依赖括号配对，
+	// 只认「这一对本身是完整的」：最后那条半截的自然不会被捞到，交给补译。
 	salvageItems(text) {
 		const found = [];
-		let depth = 0;
-		let start = -1;
-		let inString = false;
-		let escaped = false;
-		for (let i = 0; i < text.length; i++) {
-			const ch = text[i];
-			if (inString) {
-				if (escaped) {
-					escaped = false;
-				} else if (ch === '\\') {
-					escaped = true;
-				} else if (ch === '"') {
-					inString = false;
-				}
-				continue;
-			}
-			if (ch === '"') {
-				inString = true;
-				continue;
-			}
-			if (ch === '{') {
-				if (depth === 0) {
-					start = i;
-				}
-				depth++;
-				continue;
-			}
-			if (ch === '}' && depth > 0) {
-				depth--;
-				if (depth === 0 && start > -1) {
-					const slice = text.slice(start, i + 1);
-					start = -1;
-					if (!slice.includes('"id"') || !slice.includes('"text"')) {
-						continue;
-					}
-					try {
-						const row = JSON.parse(slice);
-						if (row && typeof row.id === 'string' && typeof row.text === 'string') {
-							found.push(row);
-						}
-					} catch (e) {
-						// 这个对象本身也不完整，跳过
-					}
-				}
+		const pattern = /"id"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"text"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+		let match;
+		while ((match = pattern.exec(String(text || ''))) !== null) {
+			try {
+				found.push({
+					id: JSON.parse('"' + match[1] + '"'),
+					text: JSON.parse('"' + match[2] + '"')
+				});
+			} catch (e) {
+				// 单条还原失败就跳过，交给补译
 			}
 		}
 		return found.length > 0 ? found : null;
@@ -314,7 +281,8 @@ const aiService = {
 		}
 
 		const startedAt = Date.now();
-		const runPromise = c.env.ai.run(model, { messages, temperature: 0, max_tokens: 2048 });
+		const maxTokens = translationConst.AI_MAX_TOKENS;
+		const runPromise = c.env.ai.run(model, { messages, temperature: 0, max_tokens: maxTokens });
 
 		// 超时先返回时，模型 promise 仍可能稍后 reject，这里挂一个兜底避免未处理拒绝
 		runPromise.catch(() => {});
@@ -367,6 +335,9 @@ const aiService = {
 				model,
 				ms: Date.now() - startedAt,
 				usage: response?.usage || null,
+				// 输出被截断时模型往往在原地打转，日志里要能一眼看出来
+				maxTokens,
+				truncated: Number(response?.usage?.completion_tokens || 0) >= maxTokens,
 				finish: response?.finish_reason || response?.finishReason || response?.finish || null,
 				len: content.length,
 				head: content.slice(0, 320),
