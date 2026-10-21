@@ -376,7 +376,7 @@ const en = {
     translationTimeout: 'Translation timed out. Try again later',
     translationFailed: 'Translation failed. Please retry',
     translationLoginExpired: 'Your session expired. Please sign in again',
-    translationQuotaExceeded: "Today's AI translation allowance has been exhausted",
+    translationQuotaExceeded: "Today's AI translation allowance has been exhausted; it resets at midnight",
     translationRateLimited: 'Too many requests. Try again later',
     translationTooLarge: 'Email exceeds the translation limit',
     translationNoText: 'No email text to translate',

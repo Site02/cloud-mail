@@ -76,7 +76,7 @@ const en = {
 	translationNotFound: 'Email not found or not accessible',
 	translationEmpty: 'Email has no text to translate',
 	translationTooLarge: 'Email exceeds the translation size limit',
-	translationQuotaExceeded: 'Today\'s AI translation allowance has been exhausted',
+	translationQuotaExceeded: 'Today\'s AI translation allowance has been exhausted; it resets at midnight',
 	translationRateLimited: 'Too many translation requests. Try again later',
 	translationAiUnavailable: 'AI translation is unavailable. Contact the administrator',
 	translationTimeout: 'AI translation timed out',

@@ -76,7 +76,7 @@ const zh = {
 	translationNotFound: '邮件不存在或不可访问',
 	translationEmpty: '邮件没有可翻译的正文',
 	translationTooLarge: '邮件超过翻译大小限制',
-	translationQuotaExceeded: '今日 AI 翻译额度已用尽',
+	translationQuotaExceeded: '今日 AI 翻译额度已用尽，明天 0 点自动恢复',
 	translationRateLimited: '翻译请求过于频繁，请稍后再试',
 	translationAiUnavailable: 'AI 翻译服务暂不可用，请联系管理员',
 	translationTimeout: 'AI 翻译等待超时',

@@ -376,7 +376,7 @@ const zh = {
     translationTimeout: '翻译超时，请稍后重试',
     translationFailed: '翻译失败，请重试',
     translationLoginExpired: '登录已过期，请重新登录',
-    translationQuotaExceeded: '今日 AI 翻译额度已用尽',
+    translationQuotaExceeded: '今日 AI 翻译额度已用尽，明天 0 点自动恢复',
     translationRateLimited: '操作过于频繁，请稍后重试',
     translationTooLarge: '邮件过长，超过翻译限制',
     translationNoText: '暂无可翻译正文',

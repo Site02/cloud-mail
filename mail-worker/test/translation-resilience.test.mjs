@@ -166,7 +166,7 @@ function createAi(behavior) {
 const HTML = '<div><p>Hello <b>world</b></p><p>Second</p></div>';
 
 // withTranslationTables=false 用来复现“生产库没建过翻译表”的状态
-function build({ behavior, withTranslationTables = true, brokenIndex = false, content = HTML } = {}) {
+function build({ behavior, withTranslationTables = true, brokenIndex = false, content = HTML, vars = {} } = {}) {
 	const sqlite = new DatabaseSync(':memory:');
 	sqlite.exec('CREATE TABLE email (email_id INTEGER PRIMARY KEY, account_id INTEGER, user_id INTEGER, content TEXT, text TEXT, is_del INTEGER DEFAULT 0)');
 	sqlite.exec('CREATE TABLE account (account_id INTEGER PRIMARY KEY, user_id INTEGER, is_del INTEGER DEFAULT 0)');
@@ -178,7 +178,7 @@ function build({ behavior, withTranslationTables = true, brokenIndex = false, co
 	sqlite.exec('INSERT INTO account (account_id, user_id, is_del) VALUES (3, 1, 0)');
 	sqlite.prepare('INSERT INTO email (email_id, account_id, user_id, content, text, is_del) VALUES (7, 3, 1, ?, ?, 0)')
 		.run(content, 'Hello world');
-	const env = { db: createD1(sqlite, { brokenIndex }), kv: createKv(), ai: createAi(behavior) };
+	const env = { db: createD1(sqlite, { brokenIndex }), kv: createKv(), ai: createAi(behavior), ...vars };
 	return { c: { env }, sqlite, env };
 }
 
@@ -322,6 +322,43 @@ describe('translation resilience', () => {
 		expect(done.content).toContain('[补译]Second');
 		// 批量 1 次 + 只补缺口（1 条）
 		expect(env.ai.calls.length).toBe(2);
+	});
+
+	it('翻译失败的任务会把当天额度退回去', async () => {
+		const { c, sqlite } = build({ behavior: 'not-json' });
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		const charged = sqlite.prepare('SELECT jobs, codepoints FROM translation_quota WHERE user_id = 1').get();
+		expect(charged.jobs).toBe(1);
+
+		// 分块有 3 次重试机会，用尽后任务才判死
+		for (let i = 0; i < 5; i++) {
+			try {
+				await service.step(c, { jobId: payload.jobId }, 1);
+			} catch (e) {
+				// 前几次是分块失败，最后一次是任务判死
+			}
+		}
+
+		// 一封模型啃不动的邮件不该把用户当天的额度吃光
+		const refunded = sqlite.prepare('SELECT jobs, codepoints FROM translation_quota WHERE user_id = 1').get();
+		expect(refunded.jobs).toBe(0);
+		expect(refunded.codepoints).toBe(0);
+	});
+
+	it('额度上限可以用 Worker 变量覆盖', async () => {
+		const { c, env } = build({ behavior: 'default', vars: { ai_translate_max_jobs_per_day: '1' } });
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		const done = await runToEnd(c, service, payload);
+		expect(done.state).toBe('done');
+
+		// 第二封（不同语言 → 不同缓存键）就会撞上自定义的 1 次上限
+		await expect(service.start(c, { emailId: 7, targetLang: 'en' }, 1))
+			.rejects.toThrow('今日 AI 翻译额度已用尽');
+		expect(env.ai.calls.length).toBeGreaterThan(0);
 	});
 
 	it('模型完全没按 JSON 契约返回时直接失败，不做补译', async () => {

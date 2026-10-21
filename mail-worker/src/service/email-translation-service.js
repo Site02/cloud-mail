@@ -22,8 +22,33 @@ async function sha256(text) {
 	return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-function today() {
-	return new Date().toISOString().slice(0, 10);
+// 与 login-service / reg-key-service 一致：按站点时区切日，
+// 否则「今日额度」会在北京时间早上 8 点重置，用户看到的提示和实际对不上
+// 额度上限允许用 Worker 变量覆盖：免费档 10,000 Neurons/天大约只够十几封邮件，
+// 管理员想多翻就要能自己调，而不是回来改代码
+const translationLimits = {
+	positiveInt(raw, fallback) {
+		const value = Number(raw);
+		return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+	},
+	maxJobs(env) {
+		return this.positiveInt(env?.ai_translate_max_jobs_per_day, translationConst.RATE_NEW_PER_DAY);
+	},
+	maxCodepoints(env) {
+		return this.positiveInt(env?.ai_translate_daily_codepoints, translationConst.DAILY_CODEPOINT_BUDGET);
+	},
+	// 失败任务要把额度退回去，否则一封坏邮件能把用户当天的用量全吃掉
+	refund(c, userId, day, codepoints) {
+		return translationRepository.releaseQuota(c, userId, day, codepoints);
+	}
+};
+
+function today(timeZone = 'Asia/Shanghai') {
+	try {
+		return new Date().toLocaleDateString('en-CA', { timeZone });
+	} catch (e) {
+		return new Date().toISOString().slice(0, 10);
+	}
 }
 
 const translationService = {
@@ -251,7 +276,7 @@ const translationService = {
 		// 先原子预占配额，再建任务：避免“先建任务后扣额度”期间任务已被 step 消费
 		const quota = await translationRepository.addQuota(
 			c, userId, day, codepoints,
-			translationConst.RATE_NEW_PER_DAY, translationConst.DAILY_CODEPOINT_BUDGET
+			translationLimits.maxJobs(c.env), translationLimits.maxCodepoints(c.env)
 		);
 		if (!quota) {
 			// 名额已经先占了，配额没抢到就要把它退回去，否则用户白掉一次调用机会
@@ -364,12 +389,13 @@ const translationService = {
 
 		const row = await this.readableEmail(c, job.email_id, userId);
 		const plan = await this.buildPlan(c, row, job.target_lang);
+		const charged = plan.units.reduce((sum, unit) => sum + Array.from(unit.text).length, 0);
 		if (plan.sourceHash !== job.source_hash) {
-			await translationRepository.updateJobState(c, jobId, STATE.ERROR, { error_key: 'translationSourceChanged' });
+			await this.failJob(c, job, 'translationSourceChanged', userId, charged);
 			throw new BizError(getT(c)('translationSourceChanged'), 409, 'translationSourceChanged');
 		}
 		if (plan.chunks.length !== Number(job.total_chunks)) {
-			await translationRepository.updateJobState(c, jobId, STATE.ERROR, { error_key: 'translationSourceChanged' });
+			await this.failJob(c, job, 'translationSourceChanged', userId, charged);
 			throw new BizError(getT(c)('translationSourceChanged'), 409, 'translationSourceChanged');
 		}
 
@@ -386,15 +412,11 @@ const translationService = {
 			if (claimable === 0) {
 				const exhausted = await translationRepository.countExhausted(c, jobId, now);
 				if (exhausted > 0) {
-					await translationRepository.updateJobState(c, jobId, STATE.ERROR, {
-						error_key: 'translationModelFailed'
-					});
+					await this.failJob(c, job, 'translationModelFailed', userId, charged);
 					throw new BizError(getT(c)('translationModelFailed'), 502, 'translationModelFailed');
 				}
 				if (counts.total === 0) {
-					await translationRepository.updateJobState(c, jobId, STATE.ERROR, {
-						error_key: 'translationModelFailed'
-					});
+					await this.failJob(c, job, 'translationModelFailed', userId, charged);
 					throw new BizError(getT(c)('translationModelFailed'), 502, 'translationModelFailed');
 				}
 				// 其余分块正被并发请求持有：让前端稍后再次 step，而不是判失败
@@ -441,6 +463,16 @@ const translationService = {
 			done_chunks: counts.done,
 			total_chunks: counts.total
 		}));
+	},
+
+	// 任务判死时把当天占用的额度退回去：翻译失败不该继续占着用户当天的名额，
+	// 否则一封模型啃不动的邮件能把 20 次额度一次一次吃光（线上 551 就是这么耗尽的）
+	async failJob(c, job, errorKey, userId, charged) {
+		const first = await translationRepository.markJobErrorOnce(c, job.job_id, errorKey);
+		if (first && charged > 0) {
+			await translationRepository.releaseQuota(c, userId, today(), charged);
+		}
+		return first;
 	},
 
 	async finalize(c, job, plan, userId) {
