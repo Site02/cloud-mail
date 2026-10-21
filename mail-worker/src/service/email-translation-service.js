@@ -450,7 +450,11 @@ const translationService = {
 			// 用任务上固化的模型名，避免部署期间切换模型导致结果写入错误的缓存键
 			const result = await aiService.translateBatch(c, job.target_lang, items, { model: job.model });
 			// 记下这块实际用的通道：混进兜底通道时不能冒充主力通道的成果
-			const json = JSON.stringify({ p: result.provider || '', e: Array.from(result.map.entries()) });
+			const json = JSON.stringify({
+				p: result.provider || '',
+				m: result.mixed ? 1 : 0,
+				e: Array.from(result.map.entries())
+			});
 			const ok = await translationRepository.finishChunk(
 				c, chunk.id, owner, json, translationConst.CHUNK_STATUS.DONE
 			);
@@ -503,6 +507,7 @@ const translationService = {
 		const rows = await translationRepository.selectChunks(c, job.job_id);
 		const map = new Map();
 		const providers = new Set();
+		let mixed = false;
 		for (const row of rows) {
 			if (row.status !== translationConst.CHUNK_STATUS.DONE || !row.result_json) continue;
 			let entries = [];
@@ -511,6 +516,7 @@ const translationService = {
 				// 老任务存的是纯数组，新任务存 { p: 通道, e: 条目 }
 				entries = Array.isArray(parsed) ? parsed : (parsed?.e || []);
 				if (parsed?.p) providers.add(parsed.p);
+				if (parsed?.m) mixed = true;
 			} catch (e) {
 				entries = [];
 			}
@@ -549,25 +555,27 @@ const translationService = {
 			fallback = true;
 		}
 
+		// 主力通道之外混进了兜底通道的译文时：不写 7 天可复用的 KV，并且把缓存键换掉，
+		// 否则下一次 start() 会顺着 selectJobByCacheKey 命中这条 done 任务把兜底译文回灌进主力缓存。
+		// 换键必须和「置为 done」在同一条 UPDATE 里，分两步写的话并发的 start() 会读到中间态。
+		const primary = String(job.model || '').split(':')[0];
+		const polluted = mixed || Array.from(providers).some(id => id && id !== primary);
+		// 隔离键带上 job_id：同一封邮件连续两次走兜底时不会撞 cache_key 的 UNIQUE
+		const finalKey = polluted ? `${job.cache_key}:fallback:${job.job_id}` : job.cache_key;
+
 		const won = await translationRepository.markDone(c, job.job_id, {
 			format_name: format,
 			content,
 			text,
-			fallback: fallback ? 1 : 0
+			fallback: fallback ? 1 : 0,
+			cache_key: finalKey
 		});
 
 		const fresh = await translationRepository.selectJob(c, job.job_id, userId);
 		const payload = this.toPayload(fresh);
-		// 主力通道之外混进了兜底通道的译文时，不写 7 天可复用的 KV 缓存：
-		// 否则下次会用主力通道的键命中一套别家的译文
-		const primary = String(job.model || '').split(':')[0];
-		const mixed = Array.from(providers).some(id => id && id !== primary);
-		if (won && !mixed) {
-			await this.writeKv(c, userId, job.cache_key, payload);
-		} else if (won && mixed) {
-			// 既不能写 KV，也不能留在主力的缓存键下：否则下一次 start() 会顺着
-			// selectJobByCacheKey 命中这条 done 任务并把兜底译文回灌进主力缓存
-			await translationRepository.rekeyJob(c, job.job_id, `${job.cache_key}:fallback:${Array.from(providers).join(',')}`);
+		if (won && !polluted) {
+			await this.writeKv(c, userId, finalKey, payload);
+		} else if (won && polluted) {
 			console.warn('翻译使用了兜底通道，隔离缓存键', JSON.stringify({ jobId: job.job_id, primary, providers: Array.from(providers) }));
 		}
 		return Object.assign({}, payload, { cached: !won });

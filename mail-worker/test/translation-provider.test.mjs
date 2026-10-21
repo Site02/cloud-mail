@@ -74,8 +74,15 @@ function createAi({ bad = false, boom = null } = {}) {
 			if (bad) {
 				return { response: '你好，我是翻译助手。' };
 			}
-			const items = itemsOf(JSON.parse(payload.messages[1].content || '{}'));
+			let batch = null;
+			try {
+				batch = JSON.parse(payload.messages[1].content || '{}');
+			} catch (e) {
+				batch = null;
+			}
+			const items = itemsOf(batch);
 			if (!items.length) {
+				// 纯文本补译契约
 				return { response: '[护]' + payload.messages[1].content };
 			}
 			return {
@@ -640,5 +647,90 @@ describe('translation provider chain', () => {
 		const { default: aiService } = await import('../src/service/ai-service.js');
 		expect(aiService.budget(30000, Date.now() - 1)).toBe(0);
 		expect(aiService.budget(30000, Date.now() + 5000)).toBeLessThanOrEqual(5000);
+	});
+
+	it('判死后的任务不会被迟到的 updateJobState 拉回 running', async () => {
+		const ai = createAi({ bad: true });
+		const { c, sqlite } = build({ vars: { ai } });
+		const { default: service } = await import('../src/service/email-translation-service.js');
+		const { default: repo } = await import('../src/repository/translation-repository.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		for (let i = 0; i < 3; i++) {
+			try {
+				await service.step(c, { jobId: payload.jobId }, 1);
+			} catch (e) {
+				// 逐次耗尽
+			}
+		}
+		expect(sqlite.prepare('SELECT state FROM email_translation WHERE email_id = 7').get().state).toBe('error');
+
+		// 迟到请求手里的旧状态是 running，它还会照常写回 running
+		await repo.updateJobState(c, payload.jobId, 'running');
+		expect(sqlite.prepare('SELECT state FROM email_translation WHERE email_id = 7').get().state).toBe('error');
+	});
+
+	it('同一封邮件连续两次走兜底也不会撞 UNIQUE 缓存键', async () => {
+		const openai = createOpenAi(() => ({ status: 429, payload: { error: { message: 'rate limited' } } }));
+		const ai = createAi();
+		const { c, sqlite } = build({
+			vars: {
+				ai_translate_openai_base_url: 'https://api.example.com/v1',
+				ai_translate_openai_api_key: 'sk-test',
+				ai_translate_openai_model: 'qwen-test',
+				translateFetch: openai.fetchImpl,
+				ai
+			}
+		});
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		for (let round = 0; round < 2; round++) {
+			const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+			const done = await runToEnd(c, service, payload);
+			expect(done.state).toBe('done');
+		}
+
+		const keys = sqlite.prepare("SELECT cache_key FROM email_translation WHERE cache_key LIKE '%:fallback:%'").all().map(row => row.cache_key);
+		expect(keys.length).toBe(2);
+		expect(new Set(keys).size).toBe(2);
+	});
+
+	it('批量走主力、补译走兜底时也算混入，不写主力缓存', async () => {
+		let call = 0;
+		const openai = createOpenAi(({ body }) => {
+			call += 1;
+			if (call === 1) {
+				// 批量：故意少回一条，逼出补译
+				const items = itemsOf(JSON.parse(body.messages[1].content || '{}'));
+				return openAiOk(JSON.stringify({ items: items.slice(0, -1).map(item => ({ id: item.id, text: '[Q]' + item.text })) }));
+			}
+			// 补译时主力通道挂了，被兜底通道接手
+			return { status: 429, payload: { error: { message: 'rate limited' } } };
+		});
+		const ai = createAi();
+		const { c, env, sqlite } = build({
+			vars: {
+				ai_translate_openai_base_url: 'https://api.example.com/v1',
+				ai_translate_openai_api_key: 'sk-test',
+				ai_translate_openai_model: 'qwen-test',
+				translateFetch: openai.fetchImpl,
+				ai
+			}
+		});
+		const { default: service } = await import('../src/service/email-translation-service.js');
+
+		const payload = await service.start(c, { emailId: 7, targetLang: 'zh' }, 1);
+		const done = await runToEnd(c, service, payload);
+
+		expect(done.state).toBe('done');
+		expect(done.content).toContain('[Q]Hello');
+		expect(env.kv.store.size).toBe(0);
+		expect(sqlite.prepare('SELECT cache_key FROM email_translation WHERE email_id = 7').get().cache_key)
+			.toContain(':fallback:');
+	});
+
+	it('预算不设下限，剩余多少就等多少', async () => {
+		const { default: aiService } = await import('../src/service/ai-service.js');
+		expect(aiService.budget(30000, Date.now() + 50)).toBeLessThanOrEqual(50);
 	});
 });

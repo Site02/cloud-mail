@@ -269,11 +269,13 @@ const aiService = {
 
 	// 剩余预算内的实际超时：整轮共用一条预算，别让每块各自 30s 叠成分钟级
 	budget(timeoutMs, deadline) {
+		// 不给下限：有 1s 下限的话 60s 的预算实际会跑到 60.x s，
+		// 边界上正好越过前端超时；剩余多少就用多少，<=0 由调用方判超时
 		const left = deadline - Date.now();
 		if (left <= 0) {
 			return 0;
 		}
-		return Math.max(1000, Math.min(timeoutMs, left));
+		return Math.min(timeoutMs, left);
 	},
 
 	// 写进译文的最后一道兜底：打转的文本、被改动的数字一律退回原文
@@ -725,6 +727,8 @@ const aiService = {
 			map: state.map,
 			model: modelRef,
 			provider,
+			// 一块里既用了主力又用了兜底（例如批量走主力、补译走了兜底）也算混入：
+			// 只看 provider 会漏掉这种「半块是别家译文」的情况
 			mixed: used.some(id => id !== plan.provider)
 		};
 	},

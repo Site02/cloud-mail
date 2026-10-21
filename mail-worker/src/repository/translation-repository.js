@@ -86,16 +86,24 @@ const db = {
 	},
 
 	// 只有把状态从非 done 改为 done 的那一次收尾算成功，避免并发重复写终态
+	// 完成与缓存键一起写：分两步写的话，并发的 start() 会在这中间读到 done
+	// 并把兜底产物当成主力结果回灌进 KV，之后就再也擦不掉了
 	async markDone(c, jobId, patch) {
+		const sets = ['state = ?', 'format_name = ?', 'content = ?', 'text = ?', 'fallback = ?', 'update_time = ?'];
+		const params = [
+			translationConst.STATE.DONE, patch.format_name, patch.content, patch.text,
+			patch.fallback, Date.now()
+		];
+		if (patch.cache_key) {
+			sets.push('cache_key = ?');
+			params.push(patch.cache_key);
+		}
+		params.push(jobId, translationConst.STATE.DONE);
 		const row = await c.env.db.prepare(`
-			UPDATE email_translation
-			SET state = ?, format_name = ?, content = ?, text = ?, fallback = ?, update_time = ?
+			UPDATE email_translation SET ${sets.join(', ')}
 			WHERE job_id = ? AND state <> ?
 			RETURNING job_id
-		`).bind(
-			translationConst.STATE.DONE, patch.format_name, patch.content, patch.text,
-			patch.fallback, Date.now(), jobId, translationConst.STATE.DONE
-		).first();
+		`).bind(...params).first();
 		return row;
 	},
 
@@ -125,10 +133,11 @@ const db = {
 				params.push(patch[key]);
 			}
 		}
-		params.push(jobId, translationConst.STATE.DONE);
-		// 终态不可回退：避免并发 step 把已完成任务改回 running
+		params.push(jobId, translationConst.STATE.DONE, translationConst.STATE.ERROR);
+		// 终态不可回退：done / error 都不能被并发 step 改回 running。
+		// 只挡 done 的话，迟到的请求会把已判死的任务拉回运行态，随后再判死退款一次
 		await c.env.db.prepare(
-			`UPDATE email_translation SET ${sets.join(', ')} WHERE job_id = ? AND state <> ?`
+			`UPDATE email_translation SET ${sets.join(', ')} WHERE job_id = ? AND state <> ? AND state <> ?`
 		).bind(...params).run();
 	},
 
@@ -159,6 +168,11 @@ const db = {
 					AND status IN (0, 1, 3)
 					AND (lease_until IS NULL OR lease_until < ?)
 					AND attempts < 3
+					AND EXISTS (
+						SELECT 1 FROM email_translation job
+						WHERE job.job_id = email_translation_chunk.job_id
+							AND job.state NOT IN ('done', 'error')
+					)
 				ORDER BY chunk_index
 				LIMIT 1
 			)
