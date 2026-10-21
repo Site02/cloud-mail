@@ -105,6 +105,8 @@ const en = {
     validUntil: 'Valid Until',
     expired: 'Expired',
     copy: 'Copy',
+    refresh: 'Refresh mailboxes',
+    allReceive: 'Toggle mailbox receive scope',
     copyCode: 'Copy Code',
     codeLabel: 'Code: ',
     history: 'History',

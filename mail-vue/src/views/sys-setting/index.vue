@@ -450,7 +450,7 @@
                   <el-button @click="jump('https://github.com/maillab/cloud-mail/releases')">
                     {{ currentVersion }}
                     <template #icon>
-                      <Icon icon="qlementine-icons:version-control-16" style="font-size: 20px" color="#1890FF"/>
+                      <Icon icon="qlementine-icons:version-control-16" style="font-size: 20px; color: var(--mc-focus)"/>
                     </template>
                   </el-button>
                 </el-badge>

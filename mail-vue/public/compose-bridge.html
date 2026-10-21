@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mail Cat Compose</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      background: #f4f4f1;
+      color: #111;
+    }
+
+    .top {
+      height: 64px;
+      background: #111;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+    }
+
+    .brand {
+      font-weight: 800;
+      font-size: 18px;
+    }
+
+    .wrap {
+      max-width: 1180px;
+      margin: 28px auto;
+      padding: 0 20px;
+    }
+
+    .compose {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .row {
+      border-bottom: 1px solid #eee;
+      padding: 14px 18px;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .label {
+      width: 70px;
+      color: #777;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    input {
+      flex: 1;
+      border: 0;
+      outline: 0;
+      font-size: 14px;
+    }
+
+    .body {
+      padding: 20px;
+      background: #f8f8f6;
+    }
+
+    iframe {
+      width: 100%;
+      min-height: 720px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      background: white;
+    }
+
+    .actions {
+      padding: 16px 18px;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    button {
+      padding: 11px 16px;
+      border-radius: 8px;
+      border: 1px solid #111;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .secondary {
+      background: white;
+      color: #111;
+    }
+
+    .primary {
+      background: #111;
+      color: white;
+    }
+
+    .notice {
+      margin-bottom: 14px;
+      font-size: 13px;
+      color: #666;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="top">
+  <div class="brand">🐈 Mail Cat Compose</div>
+  <div>Template MVP</div>
+</div>
+
+<div class="wrap">
+
+  <div class="notice">
+    Local Compose Bridge — no Worker or database required.
+  </div>
+
+  <div class="compose">
+
+    <div class="row">
+      <div class="label">To</div>
+      <input id="to" placeholder="recipient@example.com">
+    </div>
+
+    <div class="row">
+      <div class="label">Subject</div>
+      <input id="subject" placeholder="Subject">
+    </div>
+
+    <div class="body">
+      <iframe id="preview"></iframe>
+    </div>
+
+    <div class="actions">
+      <button
+        class="secondary"
+        onclick="backToStudio()"
+      >
+        Edit Template
+      </button>
+
+      <button
+        class="secondary"
+        onclick="copyHtml()"
+      >
+        Copy HTML
+      </button>
+
+      <button
+        class="primary"
+        onclick="sendLater()"
+      >
+        Send
+      </button>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+const html =
+  localStorage.getItem(
+    "mailcat.compose.html"
+  ) || "";
+
+const rawMeta =
+  localStorage.getItem(
+    "mailcat.compose.template"
+  );
+
+let meta = null;
+
+try {
+  meta =
+    rawMeta
+      ? JSON.parse(rawMeta)
+      : null;
+} catch {
+  meta = null;
+}
+
+document
+  .getElementById("preview")
+  .srcdoc = html;
+
+if (meta?.name) {
+  document.title =
+    `${meta.name} — Mail Cat Compose`;
+}
+
+function backToStudio() {
+  window.location.href =
+    "/template-lab.html";
+}
+
+async function copyHtml() {
+  await navigator.clipboard.writeText(
+    html
+  );
+
+  alert(
+    "HTML copied."
+  );
+}
+
+const API_BASE =
+  "http://127.0.0.1:8787/api";
+
+
+async function mailCatApi(
+  path,
+  options = {}
+) {
+
+  const token =
+    localStorage.getItem("token");
+
+  if (!token) {
+    throw new Error(
+      "You are not logged in to Mail Cat."
+    );
+  }
+
+
+  const response =
+    await fetch(
+      API_BASE + path,
+      {
+        ...options,
+
+        headers: {
+          "Content-Type":
+            "application/json",
+
+          "Authorization":
+            token,
+
+          "accept-language":
+            "en",
+
+          ...(options.headers || {})
+        }
+      }
+    );
+
+
+  const data =
+    await response.json();
+
+
+  if (
+    !response.ok ||
+    data.code !== 200
+  ) {
+
+    throw new Error(
+      data.message ||
+      `Request failed (${response.status})`
+    );
+  }
+
+
+  return data.data;
+}
+
+
+async function getLoggedInUser() {
+
+  return await mailCatApi(
+    "/my/loginUserInfo",
+    {
+      method: "GET"
+    }
+  );
+}
+
+
+async function sendLater() {
+
+  const sendButton =
+    document.querySelector(
+      ".primary"
+    );
+
+  const to =
+    document
+      .getElementById("to")
+      .value
+      .trim();
+
+  const subject =
+    document
+      .getElementById("subject")
+      .value
+      .trim();
+
+
+  if (!to) {
+    alert(
+      "Enter a recipient email address."
+    );
+
+    return;
+  }
+
+
+  if (!subject) {
+    alert(
+      "Enter a subject."
+    );
+
+    return;
+  }
+
+
+  if (!html) {
+    alert(
+      "There is no email HTML to send."
+    );
+
+    return;
+  }
+
+
+  try {
+
+    sendButton.disabled = true;
+
+    sendButton.textContent =
+      "Sending…";
+
+
+    /*
+     * Get exactly the same logged-in
+     * user information Mail Cat uses.
+     */
+
+    const user =
+      await getLoggedInUser();
+
+
+    if (
+      !user ||
+      !user.email ||
+      !user.account
+    ) {
+
+      throw new Error(
+        "Mail Cat could not resolve your sending account."
+      );
+    }
+
+
+    /*
+     * Same form structure as
+     * layout/write/index.vue
+     */
+
+    const form = {
+
+      sendEmail:
+        user.email,
+
+      receiveEmail:
+        [to],
+
+      accountId:
+        user.account.accountId,
+
+      name:
+        user.name || "",
+
+      subject:
+        subject,
+
+      content:
+        html,
+
+      sendType:
+        "",
+
+      text:
+        "",
+
+      emailId:
+        0,
+
+      attachments:
+        [],
+
+      draftId:
+        null
+    };
+
+
+    console.log(
+      "Mail Cat send payload:",
+      form
+    );
+
+
+    const emailList =
+      await mailCatApi(
+        "/email/send",
+        {
+          method: "POST",
+
+          body:
+            JSON.stringify(form)
+        }
+      );
+
+
+    console.log(
+      "Mail Cat send result:",
+      emailList
+    );
+
+
+    sendButton.textContent =
+      "Sent ✓";
+
+
+    alert(
+      `Email sent successfully to ${to}`
+    );
+
+
+    setTimeout(
+      () => {
+
+        sendButton.disabled =
+          false;
+
+        sendButton.textContent =
+          "Send";
+
+      },
+      2500
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      "Mail Cat send failed:",
+      error
+    );
+
+
+    sendButton.disabled =
+      false;
+
+    sendButton.textContent =
+      "Send";
+
+
+    alert(
+      "Send failed:\n\n" +
+      error.message
+    );
+  }
+}
+
+
+</script>
+
+</body>
+</html>

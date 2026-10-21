@@ -2,8 +2,8 @@
   <el-scrollbar class="scroll">
     <div>
       <div class="title" >
-        <Icon icon="mdi:email-outline" width="24" height="24" />
-        <div>{{settingStore.settings.title}}</div>
+        <div class="brand-mark">MC</div>
+        <div class="brand-copy"><strong>MAIL CAT</strong><small>THE MAILROOM</small></div>
       </div>
       <el-menu :collapse="false" text-color="#fff" active-text-color="#fff" style="margin-top: 10px">
         <el-menu-item @click="router.push({name: 'email'})" index="email"
@@ -64,6 +64,19 @@
           <Icon icon="eos-icons:system-ok-outlined" width="18" height="18" style="margin-left: 2px" />
           <span class="menu-name" style="margin-left: 17px">{{$t('SystemSettings')}}</span>
         </el-menu-item>
+
+<el-menu-item
+  @click="router.push({name: 'templates'})"
+  index="templates"
+  :class="route.meta.name === 'templates' ? 'choose-item' : ''"
+>
+  <Icon icon="fluent:mail-template-20-regular" width="20" height="20" />
+  <span class="menu-name" style="margin-left: 16px">
+    Templates
+  </span>
+</el-menu-item>
+
+
       </el-menu>
     </div>
   </el-scrollbar>
@@ -85,19 +98,21 @@ const route = useRoute();
 .title {
   margin: 15px 10px;
   height: 45px;
-  border-radius: 6px;
+  border-radius: 0;
   display: flex;
   position: relative;
   font-size: 16px;
   font-weight: bold;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 5px;
   color: #ffffff;
-  background: linear-gradient(135deg, #1890ff, #3a80dd);
+  background: var(--mc-orange);
   transition: all 0.3s ease;
   max-width: 240px;
-  padding: 0 10px;
+  padding: 0 12px;
+  border: 2px solid var(--mc-ink);
+  box-shadow: 5px 5px 0 var(--mc-yellow);
   > div {
     overflow: hidden;
     white-space: nowrap;
@@ -120,29 +135,60 @@ const route = useRoute();
 
 }
 
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  background: #F4EDDF;
+  color: var(--mc-ink);
+  border: 2px solid var(--mc-ink);
+  font-family: var(--mc-display);
+  font-size: 14px;
+  transform: rotate(-3deg);
+}
+
+.brand-copy {
+  display: flex !important;
+  flex-direction: column;
+  line-height: .9;
+  overflow: visible !important;
+  max-width: none !important;
+  strong { font-family: var(--mc-display); font-size: 16px; letter-spacing: -.03em; }
+  small { margin-top: 4px; font-size: 9px; letter-spacing: .12em; }
+}
+
 
 .manage-title {
   margin-top: 10px;
   padding-left: 20px;
-  color: #fff;
+  color: var(--mc-yellow);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .13em;
+  text-transform: uppercase;
 }
 
 .el-menu-item {
   margin: 3px 10px !important;
-  border-radius: 6px;
+  border-radius: 0;
   height: 36px;
   padding: 10px !important;
 }
 
 .choose-item {
-  font-weight: 400;
+  font-weight: 900;
+  color: var(--mc-ink) !important;
   background: var(--aside-menu-active-background) !important;
-  backdrop-filter: blur(4px);
+  box-shadow: 5px 5px 0 var(--mc-orange);
+  border: 2px solid var(--mc-ink);
 }
 
 @media (hover: hover) {
   .el-menu-item:hover {
-    background: rgba(255, 255, 255, 0.08) !important;
+    background: var(--mc-orange) !important;
+    color: var(--mc-ink) !important;
   }
 }
 

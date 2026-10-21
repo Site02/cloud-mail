@@ -1,0 +1,150 @@
+/* Loaded after Element Plus dark variables. Brand ink stays fixed; UI borders adapt. */
+:root {
+  color-scheme: light;
+  --mc-surface: #fffdf7;
+  --mc-canvas: #f4eddf;
+  --mc-border: #b6ac9a;
+  --mc-rule: #ded4c4;
+  --mc-text: #24211b;
+  --mc-muted: #655e52;
+  --mc-selected: #ffe6d7;
+  --mc-selected-text: #362216;
+  --mc-hover: #f7efe3;
+  --mc-focus: #b9380d;
+  --mc-shadow: rgba(18, 18, 18, .12);
+  --el-color-primary: #b9380d !important;
+  --el-color-primary-dark-2: #932a08 !important;
+  --el-color-primary-light-3: #d96938 !important;
+  --el-color-primary-light-5: #e99a77 !important;
+  --el-color-primary-light-7: #f4c8b2 !important;
+  --el-color-primary-light-8: #f9ddcb !important;
+  --el-color-primary-light-9: #fff0e7 !important;
+  --el-bg-color: var(--mc-surface) !important;
+  --el-bg-color-overlay: var(--mc-surface) !important;
+  --el-bg-color-page: var(--mc-canvas) !important;
+  --el-text-color-primary: var(--mc-text) !important;
+  --el-text-color-regular: var(--mc-text) !important;
+  --el-text-color-secondary: var(--mc-muted) !important;
+  --el-text-color-placeholder: #746c61 !important;
+  --el-border-color: var(--mc-border) !important;
+  --el-border-color-light: var(--mc-rule) !important;
+  --el-border-color-lighter: var(--mc-rule) !important;
+  --el-fill-color: var(--mc-canvas) !important;
+  --el-fill-color-light: var(--mc-hover) !important;
+  --el-fill-color-lighter: var(--mc-hover) !important;
+  --el-fill-color-blank: var(--mc-surface) !important;
+  --regular-text-color: var(--mc-text);
+  --secondary-text-color: var(--mc-muted);
+  --form-desc-color: var(--mc-muted);
+  --login-switch-color: var(--mc-focus);
+  --choose-account-background: var(--mc-selected);
+  --email-scroll-content-color: var(--mc-muted);
+  --email-hover-background: var(--mc-hover);
+  --email-right-click-background: var(--mc-selected);
+  --settings-page-background: var(--mc-canvas);
+  --base-fill: var(--mc-canvas);
+  --extra-light-fill: var(--mc-surface);
+}
+html.dark {
+  color-scheme: dark;
+  --mc-surface: #24221d;
+  --mc-canvas: #191815;
+  --mc-border: #756d60;
+  --mc-rule: #494238;
+  --mc-text: #f4eddf;
+  --mc-muted: #bcb3a4;
+  --mc-selected: #443021;
+  --mc-selected-text: #ffddbf;
+  --mc-hover: #312c24;
+  --mc-focus: #ff956c;
+  --mc-shadow: rgba(0, 0, 0, .3);
+  --el-color-primary: #ff956c !important;
+  --el-color-primary-dark-2: #ff7846 !important;
+  --el-color-primary-light-3: #cf714d !important;
+  --el-color-primary-light-5: #92543b !important;
+  --el-color-primary-light-7: #603b2c !important;
+  --el-color-primary-light-8: #4b3025 !important;
+  --el-color-primary-light-9: #39271f !important;
+  --el-text-color-placeholder: #aea597 !important;
+}
+:root, html.dark {
+  /* Match the specificity of legacy dark-mode aliases, not only :root. */
+  --regular-text-color: var(--mc-text);
+  --secondary-text-color: var(--mc-muted);
+  --form-desc-color: var(--mc-muted);
+  --login-switch-color: var(--mc-focus);
+  --choose-account-background: var(--mc-selected);
+  --email-scroll-content-color: var(--mc-muted);
+  --email-hover-background: var(--mc-hover);
+  --email-right-click-background: var(--mc-selected);
+  --settings-page-background: var(--mc-canvas);
+  --base-fill: var(--mc-canvas);
+  --extra-light-fill: var(--mc-surface);
+  --base-border-color: var(--mc-rule);
+  --light-border-color: var(--mc-rule);
+  --header-actions-border: inset 0 -1px 0 0 var(--mc-rule);
+}
+.email-container { background: var(--mc-surface); color: var(--mc-text); }
+.email-container .header-actions { background: var(--mc-canvas); }
+.email-container .email-row[data-checked="true"] {
+  background: var(--mc-selected) !important;
+  box-shadow: inset 3px 0 0 var(--mc-focus), inset 0 -1px 0 var(--mc-rule);
+}
+.el-checkbox__inner { background: var(--mc-surface) !important; border-color: var(--mc-border) !important; }
+.el-checkbox__input.is-checked .el-checkbox__inner,
+.el-checkbox__input.is-indeterminate .el-checkbox__inner {
+  background: #ffbf17 !important;
+  border-color: #121212 !important;
+}
+.el-checkbox__input.is-checked .el-checkbox__inner::after { border-color: #121212 !important; }
+.el-checkbox__input.is-indeterminate .el-checkbox__inner::before { background: #121212 !important; }
+.el-checkbox__input.is-disabled { opacity: .5; }
+.el-checkbox__input.is-focus .el-checkbox__inner { outline: 2px solid var(--mc-focus); outline-offset: 3px; }
+.el-main, .main-container, .el-header, .main-view { background: var(--mc-surface) !important; }
+.el-header { height: 60px !important; border-bottom: 2px solid var(--mc-rule) !important; }
+.el-button { border-color: var(--mc-border) !important; box-shadow: 3px 3px 0 var(--mc-shadow); color: var(--mc-text); background: var(--mc-surface); }
+.el-button--primary { color: #121212 !important; background: #ffbf17 !important; border-color: #121212 !important; }
+.el-button--primary:hover:not(:disabled) { background: #ffd15e !important; }
+.el-button.is-link, .el-button.is-text, .el-button.is-circle { box-shadow: none !important; border-color: transparent !important; }
+.el-button.is-disabled { opacity: .55; box-shadow: none !important; transform: none !important; }
+.el-input__wrapper, .el-textarea__inner, .el-select__wrapper, .el-input-tag__wrapper {
+  background: var(--mc-surface) !important;
+  box-shadow: 0 0 0 1px var(--mc-border) inset !important;
+  color: var(--mc-text) !important;
+}
+.el-input__wrapper.is-focus, .el-textarea__inner:focus, .el-select__wrapper.is-focused { box-shadow: 0 0 0 2px var(--mc-focus) inset !important; }
+.el-input-group__append, .el-input-group__prepend { background: var(--mc-canvas) !important; border-color: var(--mc-border) !important; color: var(--mc-text) !important; }
+.el-card, .el-dialog, .el-drawer, .el-message-box, .el-notification, .el-dropdown__popper, .el-select__popper, .el-popper {
+  border-color: var(--mc-border) !important;
+  background-color: var(--mc-surface);
+  color: var(--mc-text);
+  box-shadow: 5px 5px 0 var(--mc-shadow) !important;
+}
+.el-dialog__header, .el-drawer__header { border-color: var(--mc-rule); }
+.el-popper.is-dark { background: #121212 !important; color: #f4eddf !important; }
+.el-table { --el-table-border-color: var(--mc-rule) !important; --el-table-header-bg-color: #ffbf17 !important; --el-table-row-hover-bg-color: var(--mc-hover) !important; border-color: var(--mc-border); }
+.el-table th.el-table__cell { color: #121212 !important; }
+.el-pagination button, .el-pagination .number { border-color: var(--mc-border); }
+.el-empty__image { background: #f4eddf; padding: 8px; border: 2px solid #121212; box-shadow: 5px 5px 0 var(--mc-shadow); }
+.el-empty__image img { object-fit: contain; }
+.account-box { background: var(--mc-canvas) !important; }
+.account-box .head-opt { height: 42px; gap: 4px; border-bottom: 1px solid var(--mc-rule); }
+.account-box .item { border: 1px solid var(--mc-border) !important; background: var(--mc-surface); box-shadow: 3px 3px 0 var(--mc-shadow) !important; transition: background 120ms, border-color 120ms; }
+.account-box .item:hover { background: var(--mc-hover); border-color: var(--mc-focus) !important; }
+.account-box .item-choose, .account-box .item-choose:hover { background: var(--mc-selected) !important; color: var(--mc-selected-text); border-color: var(--mc-focus) !important; box-shadow: inset 4px 0 0 #ff4b12, 3px 3px 0 var(--mc-shadow) !important; }
+.account-box .item .account { font-weight: 700; }
+.mc-icon-button { width: 32px; height: 32px; display: inline-grid; place-items: center; color: var(--mc-muted); border: 1px solid transparent; cursor: pointer; flex-shrink: 0; }
+.mc-icon-button:hover:not(:disabled) { color: var(--mc-focus); border-color: var(--mc-border); background: var(--mc-hover); }
+.mc-icon-button:disabled { opacity: .45; cursor: not-allowed; }
+.mc-icon-button svg { width: 20px; height: 20px; }
+.mc-icon-button.is-accent { color: var(--mc-focus); }
+button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--mc-focus) !important; outline-offset: 3px; }
+#login-box .form-wrapper .container { background: var(--mc-surface); color: var(--mc-text); border-left: 1px solid var(--mc-rule); box-shadow: none; }
+.header .icon-item:hover { background: var(--mc-hover); color: var(--mc-focus); }
+.header .icon-item { color: var(--mc-text); cursor: pointer; }
+.header .icon-item svg { width: 22px; height: 22px; }
+.header .writer:hover { background: #ffbf17; }
+#nprogress .bar { background: #ff4b12; }
+#nprogress .peg { box-shadow: 0 0 10px #ff4b12, 0 0 5px #ff4b12; }
+#nprogress .spinner-icon { border-top-color: #ff4b12; border-left-color: #ff4b12; }
+@media (prefers-reduced-motion: reduce) { .account-box .item { transition: none; } }

@@ -139,7 +139,7 @@
                        :showUserInfo="showUserInfo"
                        :type="type"/>
       <div class="empty" v-if="noLoading && emailList.length === 0 && !loading">
-        <el-empty :image-size="isMobile ? 120 : null" :description="$t('noMessagesFound')"/>
+        <el-empty :image="mailCatRest" :image-size="isMobile ? 150 : 220" :description="$t('noMessagesFound')"/>
       </div>
     </div>
     <el-dropdown
@@ -235,6 +235,7 @@
 </template>
 
 <script setup>
+import mailCatRest from '@/assets/mailcat/rest.png';
 import {Icon} from "@iconify/vue";
 import skeletonBlock from "@/components/email-scroll/skeleton/index.vue"
 import {computed, onActivated, reactive, ref, watch, nextTick, onMounted, onUnmounted } from "vue";

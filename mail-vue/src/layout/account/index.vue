@@ -1,8 +1,8 @@
 <template>
   <div class="account-box">
     <div class="head-opt">
-      <Icon v-perm="'account:add'" class="icon add" icon="ion:add-outline" width="23" height="23" @click="add"/>
-      <Icon class="icon refresh" icon="ion:reload" width="18" height="18" @click="refresh"/>
+      <button v-perm="'account:add'" type="button" class="mc-icon-button" :aria-label="$t('addAccount')" :title="$t('addAccount')" @click="add"><MailroomIcon name="plus" /></button>
+      <button type="button" class="mc-icon-button" :aria-label="$t('refresh')" :title="$t('refresh')" @click="refresh"><MailroomIcon name="refresh" /></button>
     </div>
     <el-scrollbar class="scrollbar" ref="scrollbarRef">
       <div v-infinite-scroll="getAccountList" :infinite-scroll-distance="600" :infinite-scroll-immediate="false">
@@ -13,15 +13,13 @@
           </div>
           <div class="opt">
             <div class="send-email" @click.stop>
-              <Icon @click="setAllReceive(item)" v-if="!item.allReceive" icon="eva:email-fill" width="22" height="22" color="#fccb1a"/>
-              <Icon @click="setAllReceive(item)" v-else icon="flat-color-icons:folder" width="22" height="22" color="#23c4f1" />
+              <button type="button" class="mc-icon-button is-accent" :aria-label="$t('allReceive')" :title="$t('allReceive')" :aria-pressed="!item.allReceive" @click="setAllReceive(item)"><MailroomIcon :name="!item.allReceive ? 'mail' : 'folder'" /></button>
             </div>
             <div class="settings" @click.stop>
-              <Icon icon="fluent-color:clipboard-24" width="22" height="22" @click.stop="copyAccount(item.email)"/>
-              <Icon icon="fluent:settings-24-filled" width="21" height="21" color="#909399"
-                    v-if="showNullSetting(item)"/>
+              <button type="button" class="mc-icon-button" :aria-label="$t('copy')" :title="$t('copy')" @click.stop="copyAccount(item.email)"><MailroomIcon name="copy" /></button>
+              <button type="button" class="mc-icon-button" disabled :aria-label="$t('settings')" v-if="showNullSetting(item)"><MailroomIcon name="settings" /></button>
               <el-dropdown v-else>
-                <Icon icon="fluent:settings-24-filled" width="21" height="21" color="#909399"/>
+                <button type="button" class="mc-icon-button" :aria-label="$t('settings')" :title="$t('settings')"><MailroomIcon name="settings" /></button>
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item v-if="hasPerm('email:send')" @click="openSetName(item)">{{ $t('rename') }}</el-dropdown-item>
@@ -70,7 +68,7 @@
           <div>{{ $t('noMoreData') }}</div>
         </div>
         <div class="empty" v-if="noLoading && accounts.length === 0">
-          <el-empty :description="$t('noMessagesFound')"/>
+          <el-empty :image="mailCatRest" :image-size="150" :description="$t('noMessagesFound')"/>
         </div>
       </div>
 
@@ -126,6 +124,8 @@
   </div>
 </template>
 <script setup>
+import MailroomIcon from '@/components/mailroom-icon/index.vue';
+import mailCatRest from '@/assets/mailcat/rest.png';
 import {Icon} from "@iconify/vue";
 import {computed, nextTick, reactive, ref, watch} from "vue";
 import {

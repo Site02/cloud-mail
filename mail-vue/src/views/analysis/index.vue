@@ -186,15 +186,15 @@ const emailColumnData = {
 }
 
 const topic = computed(() => ({
-  color: uiStore.dark ? '#E5EAF3' : '#303133',
-  background: uiStore.dark ? '#141414' : '#FFFFFF',
-  borderColor: uiStore.dark ? '#141414' : '#FFFFFF',
-  scaleLineColor: uiStore.dark ? '#636466' : '#CDD0D6',
-  crossColor: uiStore.dark ? '#8D9095' : '#A8ABB2',
-  axisColor: uiStore.dark ? '#A3A6AD' : '#909399',
-  splitLineColor: uiStore.dark ? '#58585B' : '#D4D7DE',
-  gaugeSplitLine: uiStore.dark ? '#CFD3DC' : '#606266',
-  containerBackground: uiStore.dark ? '#6C6E72' : '#E6EBF8'
+  color: uiStore.dark ? '#F4EDDF' : '#24211B',
+  background: uiStore.dark ? '#24221D' : '#FFFDF7',
+  borderColor: uiStore.dark ? '#494238' : '#DED4C4',
+  scaleLineColor: uiStore.dark ? '#756D60' : '#B6AC9A',
+  crossColor: uiStore.dark ? '#BCB3A4' : '#655E52',
+  axisColor: uiStore.dark ? '#BCB3A4' : '#655E52',
+  splitLineColor: uiStore.dark ? '#494238' : '#DED4C4',
+  gaugeSplitLine: uiStore.dark ? '#BCB3A4' : '#655E52',
+  containerBackground: uiStore.dark ? '#494238' : '#E8DFCF'
 }))
 let daySendTotal = 0
 let leaveWidth = 0
@@ -376,7 +376,7 @@ function createSenderPie() {
         labelLine: {
           show: true
         },
-        color: ['#3CB2FF', '#13DEB9', '#FBBF24', '#FF7F50', '#BAE6FD', '#C084FC'] // 添加符合主题的配色
+        color: ['#FF4B12', '#FFBF17', '#B47743', '#846249', '#779280', '#8D7396']
       }
     ]
   }
@@ -503,22 +503,22 @@ function createIncreaseLine() {
         smooth: 0.1,
         symbol: 'none',
         lineStyle: {
-          color: '#1D84FF',
+          color: '#FF4B12',
           width: 2.5
         },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
             {
               offset: 0,
-              color: 'rgba(29, 132, 255, 0.3)'
+              color: 'rgba(255, 75, 18, 0.3)'
             },
             {
               offset: 1,
-              color: 'rgba(29, 132, 255, 0.03)'
+              color: 'rgba(255, 75, 18, 0.03)'
             }
           ])
         },
-        color: ['#1D84FF'],
+        color: ['#FF4B12'],
       }
     ]
   };
@@ -626,7 +626,7 @@ function createEmailColumnChart() {
         },
         data: emailColumnData.receiveData,
         itemStyle: {
-          color: '#3CB2FF',
+          color: '#FF4B12',
         }
       },
       {
@@ -641,7 +641,7 @@ function createEmailColumnChart() {
         },
         data: emailColumnData.sendData,
         itemStyle: {
-          color: '#13deb9',
+          color: '#FFBF17',
         }
       }
     ]
@@ -671,13 +671,13 @@ function createSendGauge() {
         show: true,
         roundCap: true,
         itemStyle: {
-          color: '#3CB2FF'
+          color: '#FF4B12'
         }
       },
       // 指针颜色（新增）
       pointer: {
         itemStyle: {
-          color: '#3CB2FF'
+          color: '#FF4B12'
         }
       },
       axisLabel: {
@@ -716,7 +716,7 @@ function createSendGauge() {
         }
       }]
     }],
-    color: ['#3CB2FF']
+    color: ['#FF4B12']
   };
   sendGauge.setOption(option);
 }

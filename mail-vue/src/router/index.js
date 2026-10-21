@@ -10,48 +10,62 @@ const routes = [
         name: 'layout',
         redirect: '/inbox',
         component: () => import('@/layout/index.vue'),
-        children: [
-            {
-                path: '/inbox',
-                name: 'email',
-                component: () => import('@/views/email/index.vue'),
-                meta: {
-                    title: 'inbox',
-                    name: 'email',
-                    menu: true
-                }
-            },
-            {
-                path: '/mail',
-                name: 'content',
-                component: () => import('@/views/content/index.vue'),
-                meta: {
-                    title: 'message',
-                    name: 'content',
-                    menu: false
-                }
-            },
-            {
-                path: '/settings',
-                name: 'setting',
-                component: () => import('@/views/setting/index.vue'),
-                meta: {
-                    title: 'settings',
-                    name: 'setting',
-                    menu: true
-                }
-            },
-            {
-                path: '/starred',
-                name: 'star',
-                component: () => import('@/views/star/index.vue'),
-                meta: {
-                    title: 'starred',
-                    name: 'star',
-                    menu: true
-                }
-            },
-        ]
+       children: [
+    {
+        path: '/inbox',
+        name: 'email',
+        component: () => import('@/views/email/index.vue'),
+        meta: {
+            title: 'inbox',
+            name: 'email',
+            menu: true
+        }
+    },
+
+    {
+        path: '/templates',
+        name: 'templates',
+        component: () => import('@/TemplateLibraryTest.vue'),
+        meta: {
+            title: 'templates',
+            name: 'templates',
+            menu: true
+        }
+    },
+
+    {
+        path: '/mail',
+        name: 'content',
+        component: () => import('@/views/content/index.vue'),
+        meta: {
+            title: 'message',
+            name: 'content',
+            menu: false
+        }
+    },
+
+    {
+        path: '/settings',
+        name: 'setting',
+        component: () => import('@/views/setting/index.vue'),
+        meta: {
+            title: 'settings',
+            name: 'setting',
+            menu: true
+        }
+    },
+
+    {
+        path: '/starred',
+        name: 'star',
+        component: () => import('@/views/star/index.vue'),
+        meta: {
+            title: 'starred',
+            name: 'star',
+            menu: true
+        }
+    },
+]
 
     },
     {

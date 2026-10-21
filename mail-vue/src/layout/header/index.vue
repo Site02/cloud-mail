@@ -4,21 +4,22 @@
       <hanburger @click="changeAside"></hanburger>
       <span class="breadcrumb-item">{{ $t(route.meta.title) }}</span>
     </div>
-    <div v-perm="'email:send'" class="writer-box" @click="openSend">
+    <button type="button" v-perm="'email:send'" class="writer-box" aria-label="Compose email" @click="openSend">
       <div class="writer">
-        <Icon icon="material-symbols:edit-outline-sharp" width="22" height="22"/>
+        <MailroomIcon name="pencil" style="width: 22px; height: 22px" />
+        <span class="writer-text">COMPOSE</span>
       </div>
-    </div>
+    </button>
     <div class="toolbar">
-      <div v-if="uiStore.dark" class="sun-icon icon-item" @click="openDark($event)">
-        <Icon icon="mingcute:sun-fill"/>
-      </div>
-      <div v-else class="dark-icon icon-item" @click="openDark($event)">
-        <Icon icon="solar:moon-linear"/>
-      </div>
-      <div class="notice icon-item" @click="openNotice">
-        <Icon icon="streamline-plump:announcement-megaphone"/>
-      </div>
+      <button type="button" v-if="uiStore.dark" class="sun-icon icon-item" aria-label="Switch to light theme" title="Switch to light theme" @click="openDark($event)">
+        <MailroomIcon name="sun" />
+      </button>
+      <button type="button" v-else class="dark-icon icon-item" aria-label="Switch to dark theme" title="Switch to dark theme" @click="openDark($event)">
+        <MailroomIcon name="moon" />
+      </button>
+      <button type="button" class="notice icon-item" aria-label="View announcements" title="View announcements" @click="openNotice">
+        <MailroomIcon name="notice" />
+      </button>
       <el-dropdown ref="userinfoRef" @visible-change="e => userInfoShow = e" :teleported="false" popper-class="detail-dropdown">
         <div class="avatar" @click="userInfoHide" >
           <div class="avatar-text">
@@ -73,6 +74,7 @@
 </template>
 
 <script setup>
+import MailroomIcon from '@/components/mailroom-icon/index.vue';
 import router from "@/router";
 import hanburger from '@/components/hamburger/index.vue'
 import {logout} from "@/request/login.js";
@@ -196,7 +198,7 @@ function openDark(e) {
   const nextIsDark = !uiStore.dark
   const root = document.documentElement
 
-  if (!document.startViewTransition) {
+    if (!document.startViewTransition || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     switchDark(nextIsDark, root);
     return
   }
@@ -225,10 +227,10 @@ function openDark(e) {
 }
 
 function switchDark(nextIsDark, root) {
-  root.setAttribute('class', nextIsDark ? 'dark' : '')
+  root.classList.toggle('dark', nextIsDark)
   const metaTag = document.getElementById('theme-color-meta');
   const isMobile =  !window.matchMedia("(pointer: fine) and (hover: hover)").matches;
-  metaTag.setAttribute('content', nextIsDark ? (isMobile ? '#141414' : '#000000') : (isMobile ? '#191A23' : '#F1F1F1'));
+  metaTag?.setAttribute('content', nextIsDark ? '#191815' : '#F4EDDF');
   uiStore.dark = nextIsDark
 }
 
@@ -376,20 +378,24 @@ function formatName(email) {
   margin-left: 5px;
 
   .writer {
-    width: 34px;
+    width: auto;
     height: 34px;
-    border-radius: 50%;
-    color: #ffffff;
-    background: linear-gradient(135deg, #1890ff, #3a80dd);
+    padding: 0 13px;
+    border-radius: 0;
+    color: var(--mc-ink);
+    background: var(--mc-orange);
+    border: 2px solid var(--mc-ink);
+    box-shadow: 4px 4px 0 var(--mc-ink);
     transition: all 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
 
     .writer-text {
-      margin-left: 15px;
-      font-size: 14px;
-      font-weight: bold;;
+      margin-left: 7px;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .08em;
     }
   }
 }
@@ -402,8 +408,10 @@ function formatName(email) {
 }
 
 .breadcrumb-item {
-  font-weight: bold;
-  font-size: 14px;
+  font-family: var(--mc-display);
+  font-weight: 900;
+  font-size: 18px;
+  text-transform: uppercase;
   color: var(--el-text-color-primary);
   overflow: hidden;
   white-space: nowrap;

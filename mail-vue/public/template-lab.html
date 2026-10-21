@@ -1,0 +1,1875 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <title>Mail Cat Studio</title>
+
+  <style>
+    :root {
+      --bg: #f4f4f1;
+      --panel: #ffffff;
+      --ink: #111111;
+      --muted: #777772;
+      --line: #deded8;
+      --soft: #eeeeea;
+      --dark: #111111;
+      --radius: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      overflow: hidden;
+      font-family:
+        Inter,
+        ui-sans-serif,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+      background: var(--bg);
+      color: var(--ink);
+    }
+
+    button,
+    input,
+    textarea,
+    select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .app {
+      height: 100vh;
+      display: grid;
+
+      grid-template-columns:
+        280px
+        minmax(0, 1fr)
+        320px;
+
+      grid-template-rows:
+        64px
+        minmax(0, 1fr);
+    }
+
+    /* HEADER */
+
+    .topbar {
+      grid-column: 1 / -1;
+
+      display: flex;
+      align-items: center;
+
+      gap: 18px;
+
+      padding: 0 18px;
+
+      background: #111;
+      color: #fff;
+
+      border-bottom: 1px solid #222;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+
+      min-width: 240px;
+
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+
+      display: grid;
+      place-items: center;
+
+      border-radius: 9px;
+
+      background: #fff;
+      color: #111;
+
+      font-size: 19px;
+    }
+
+    .document-name {
+      flex: 1;
+
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      font-size: 14px;
+      color: #d1d1cb;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .top-button {
+      min-height: 38px;
+
+      padding: 0 14px;
+
+      border-radius: 8px;
+      border: 1px solid #3a3a3a;
+
+      background: #1d1d1d;
+      color: white;
+
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .top-button.primary {
+      background: white;
+      color: #111;
+      border-color: white;
+    }
+
+    /* LEFT */
+
+    .library-panel {
+      min-height: 0;
+
+      display: flex;
+      flex-direction: column;
+
+      background: #181818;
+      color: white;
+
+      border-right: 1px solid #292929;
+    }
+
+    .panel-heading {
+      padding: 20px 18px 14px;
+    }
+
+    .eyebrow {
+      margin-bottom: 6px;
+
+      color: #8f8f8a;
+
+      font-size: 10px;
+      font-weight: 800;
+
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .panel-heading h2 {
+      margin: 0;
+
+      font-size: 21px;
+      letter-spacing: -0.04em;
+    }
+
+    .search-wrap {
+      padding: 0 14px 14px;
+    }
+
+    .search {
+      width: 100%;
+
+      padding: 11px 12px;
+
+      border: 1px solid #333;
+      border-radius: 9px;
+
+      outline: 0;
+
+      background: #222;
+      color: white;
+    }
+
+    .search::placeholder {
+      color: #777;
+    }
+
+    .template-list {
+      min-height: 0;
+      flex: 1;
+
+      overflow-y: auto;
+
+      padding: 0 10px 22px;
+    }
+
+    .template-card {
+      width: 100%;
+
+      display: block;
+
+      margin: 0 0 7px;
+      padding: 13px;
+
+      text-align: left;
+
+      border: 1px solid transparent;
+      border-radius: 10px;
+
+      background: transparent;
+      color: white;
+
+      transition: 120ms ease;
+    }
+
+    .template-card:hover {
+      background: #222;
+    }
+
+    .template-card.active {
+      background: #292929;
+      border-color: #414141;
+    }
+
+    .template-title {
+      margin-bottom: 4px;
+
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .template-description {
+      overflow: hidden;
+
+      color: #969691;
+
+      font-size: 11px;
+      line-height: 1.45;
+
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    /* CANVAS */
+
+    .canvas {
+      min-width: 0;
+      min-height: 0;
+
+      display: flex;
+      flex-direction: column;
+
+      background:
+        linear-gradient(#dfdfda 1px, transparent 1px),
+        linear-gradient(90deg, #dfdfda 1px, transparent 1px),
+        #e9e9e5;
+
+      background-size: 24px 24px;
+    }
+
+    .canvas-toolbar {
+      min-height: 52px;
+
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      gap: 16px;
+
+      padding: 7px 14px;
+
+      background: rgba(247, 247, 244, 0.94);
+
+      border-bottom: 1px solid #d5d5d0;
+    }
+
+    .device-switch {
+      display: flex;
+
+      padding: 3px;
+
+      border: 1px solid #d5d5d0;
+      border-radius: 9px;
+
+      background: white;
+    }
+
+    .device-button {
+      padding: 7px 12px;
+
+      border: 0;
+      border-radius: 6px;
+
+      background: transparent;
+      color: #777;
+
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .device-button.active {
+      background: #111;
+      color: white;
+    }
+
+    .canvas-info {
+      font-size: 11px;
+      color: #777;
+    }
+
+    .preview-stage {
+      min-height: 0;
+      flex: 1;
+
+      overflow: auto;
+
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+
+      padding: 34px;
+    }
+
+    .device {
+      width: min(100%, 760px);
+
+      min-height: 760px;
+
+      overflow: hidden;
+
+      background: white;
+
+      border: 1px solid #cacac4;
+      border-radius: 13px;
+
+      box-shadow:
+        0 3px 10px rgba(0, 0, 0, 0.04),
+        0 22px 70px rgba(0, 0, 0, 0.12);
+
+      transition:
+        width 180ms ease,
+        border-radius 180ms ease;
+    }
+
+    .device.mobile {
+      width: 390px;
+    }
+
+    #emailPreview {
+      width: 100%;
+      height: 780px;
+
+      display: block;
+
+      border: 0;
+
+      background: white;
+    }
+
+    /* EDITOR */
+
+    .editor-panel {
+      min-width: 0;
+      min-height: 0;
+
+      display: flex;
+      flex-direction: column;
+
+      background: white;
+
+      border-left: 1px solid var(--line);
+    }
+
+    .editor-head {
+      padding: 18px 18px 14px;
+
+      border-bottom: 1px solid var(--line);
+    }
+
+    .editor-head h2 {
+      margin: 0 0 5px;
+
+      font-size: 18px;
+
+      letter-spacing: -0.03em;
+    }
+
+    .editor-head p {
+      margin: 0;
+
+      color: var(--muted);
+
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .editor-body {
+      min-height: 0;
+      flex: 1;
+
+      overflow-y: auto;
+
+      padding: 18px;
+    }
+
+    .field {
+      margin-bottom: 17px;
+    }
+
+    .field-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+
+      margin-bottom: 7px;
+
+      font-size: 11px;
+      font-weight: 800;
+
+      text-transform: uppercase;
+      letter-spacing: 0.055em;
+    }
+
+    .field-type {
+      color: #aaa;
+
+      font-size: 9px;
+      font-weight: 700;
+    }
+
+    .field input[type="text"],
+    .field input[type="url"],
+    .field textarea {
+      width: 100%;
+
+      padding: 10px 11px;
+
+      border: 1px solid #d9d9d4;
+      border-radius: 8px;
+
+      outline: none;
+
+      background: #fafaf8;
+      color: #111;
+    }
+
+    .field textarea {
+      min-height: 90px;
+      resize: vertical;
+
+      line-height: 1.45;
+    }
+
+    .field input:focus,
+    .field textarea:focus {
+      border-color: #111;
+      background: white;
+    }
+
+    .color-row {
+      display: grid;
+      grid-template-columns: 44px 1fr;
+
+      gap: 8px;
+    }
+
+    .color-picker {
+      width: 44px;
+      height: 40px;
+
+      padding: 3px;
+
+      border: 1px solid #d9d9d4;
+      border-radius: 8px;
+
+      background: white;
+    }
+
+    .editor-footer {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+
+      gap: 8px;
+
+      padding: 13px;
+
+      border-top: 1px solid var(--line);
+    }
+
+    .footer-button {
+      min-height: 42px;
+
+      border-radius: 9px;
+
+      font-weight: 800;
+      font-size: 12px;
+    }
+
+    .footer-button.secondary {
+      border: 1px solid #d5d5d0;
+
+      background: white;
+      color: #111;
+    }
+
+    .footer-button.primary {
+      border: 1px solid #111;
+
+      background: #111;
+      color: white;
+    }
+
+    /* STATES */
+
+    .loading,
+    .empty {
+      padding: 30px 20px;
+
+      color: #777;
+
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+
+      z-index: 999;
+
+      transform:
+        translateX(-50%)
+        translateY(18px);
+
+      opacity: 0;
+      pointer-events: none;
+
+      padding: 11px 16px;
+
+      border-radius: 999px;
+
+      background: #111;
+      color: white;
+
+      font-size: 12px;
+      font-weight: 700;
+
+      transition: 180ms ease;
+    }
+
+    .toast.show {
+      opacity: 1;
+
+      transform:
+        translateX(-50%)
+        translateY(0);
+    }
+
+    @media (max-width: 1050px) {
+      .app {
+        grid-template-columns:
+          220px
+          minmax(0, 1fr)
+          280px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="app">
+
+  <!-- TOP BAR -->
+
+  <header class="topbar">
+
+    <div class="brand">
+      <div class="brand-mark">🐈</div>
+      Mail Cat
+    </div>
+
+    <div
+      id="documentName"
+      class="document-name"
+    >
+      Template Studio
+    </div>
+
+    <div class="top-actions">
+
+      <button
+        id="resetTopButton"
+        class="top-button"
+        type="button"
+      >
+        Reset
+      </button>
+
+      <button
+        id="copyButton"
+        class="top-button"
+        type="button"
+      >
+        Copy HTML
+      </button>
+
+      <button
+        id="useButton"
+        class="top-button primary"
+        type="button"
+      >
+        Use Template →
+      </button>
+
+    </div>
+
+  </header>
+
+
+  <!-- TEMPLATE LIBRARY -->
+
+  <aside class="library-panel">
+
+    <div class="panel-heading">
+
+      <div class="eyebrow">
+        Mail Cat Studio
+      </div>
+
+      <h2>
+        Templates
+      </h2>
+
+    </div>
+
+    <div class="search-wrap">
+
+      <input
+        id="searchInput"
+        class="search"
+        type="search"
+        placeholder="Search templates..."
+      />
+
+    </div>
+
+    <div
+      id="templateList"
+      class="template-list"
+    >
+      <div class="loading">
+        Loading library…
+      </div>
+    </div>
+
+  </aside>
+
+
+  <!-- CANVAS -->
+
+  <main class="canvas">
+
+    <div class="canvas-toolbar">
+
+      <div class="device-switch">
+
+        <button
+          class="device-button active"
+          data-device="desktop"
+          type="button"
+        >
+          Desktop
+        </button>
+
+        <button
+          class="device-button"
+          data-device="mobile"
+          type="button"
+        >
+          Mobile
+        </button>
+
+      </div>
+
+      <div
+        id="canvasInfo"
+        class="canvas-info"
+      >
+        Email preview
+      </div>
+
+    </div>
+
+    <div class="preview-stage">
+
+      <div
+        id="device"
+        class="device"
+      >
+
+        <iframe
+          id="emailPreview"
+          title="Mail Cat email preview"
+        ></iframe>
+
+      </div>
+
+    </div>
+
+  </main>
+
+
+  <!-- RIGHT EDITOR -->
+
+  <aside class="editor-panel">
+
+    <div class="editor-head">
+
+      <h2>
+        Edit template
+      </h2>
+
+      <p>
+        Change the content while Mail Cat keeps the email structure intact.
+      </p>
+
+    </div>
+
+    <div
+      id="editorBody"
+      class="editor-body"
+    >
+      <div class="empty">
+        Select a template.
+      </div>
+    </div>
+
+    <div class="editor-footer">
+
+      <button
+        id="resetButton"
+        class="footer-button secondary"
+        type="button"
+      >
+        Reset
+      </button>
+
+      <button
+        id="useButtonBottom"
+        class="footer-button primary"
+        type="button"
+      >
+        Use Template
+      </button>
+
+    </div>
+
+  </aside>
+
+</div>
+
+
+<div
+  id="toast"
+  class="toast"
+></div>
+
+
+<script>
+  const state = {
+    templates: [],
+    selected: null,
+
+    originalHtml: "",
+    currentHtml: "",
+
+    defaults: {},
+    values: {},
+
+    device: "desktop"
+  };
+
+
+  const elements = {
+    templateList:
+      document.getElementById("templateList"),
+
+    searchInput:
+      document.getElementById("searchInput"),
+
+    editorBody:
+      document.getElementById("editorBody"),
+
+    emailPreview:
+      document.getElementById("emailPreview"),
+
+    device:
+      document.getElementById("device"),
+
+    documentName:
+      document.getElementById("documentName"),
+
+    canvasInfo:
+      document.getElementById("canvasInfo"),
+
+    resetButton:
+      document.getElementById("resetButton"),
+
+    resetTopButton:
+      document.getElementById("resetTopButton"),
+
+    copyButton:
+      document.getElementById("copyButton"),
+
+    useButton:
+      document.getElementById("useButton"),
+
+    useButtonBottom:
+      document.getElementById("useButtonBottom"),
+
+    toast:
+      document.getElementById("toast")
+  };
+
+
+  function showToast(message) {
+
+    elements.toast.textContent = message;
+
+    elements.toast.classList.add("show");
+
+    clearTimeout(showToast.timer);
+
+    showToast.timer =
+      setTimeout(
+        () => {
+          elements.toast.classList.remove("show");
+        },
+        1800
+      );
+  }
+
+
+  function getTemplateId(template) {
+
+    return (
+      template.id ||
+      template.slug ||
+      template.key ||
+      "template"
+    );
+  }
+
+
+  function getTemplateName(template) {
+
+    return (
+      template.name ||
+      template.title ||
+      getTemplateId(template)
+    );
+  }
+
+
+  function getTemplateDescription(template) {
+
+    return (
+      template.description ||
+      template.category ||
+      ""
+    );
+  }
+
+
+  function getTemplateFile(template) {
+
+    if (template.file) {
+      return template.file;
+    }
+
+    if (template.html) {
+      return template.html;
+    }
+
+    if (template.output) {
+      return template.output;
+    }
+
+    if (template.filename) {
+      return template.filename;
+    }
+
+    let id =
+      getTemplateId(template)
+        .replace(/^mailcat-/, "");
+
+    return `mailcat-${id}.html`;
+  }
+
+
+  function getFields(template) {
+
+    if (Array.isArray(template.fields)) {
+      return template.fields;
+    }
+
+    if (
+      template.schema &&
+      Array.isArray(template.schema.fields)
+    ) {
+      return template.schema.fields;
+    }
+
+    return [];
+  }
+
+
+  function getFieldId(field, index) {
+
+    return (
+      field.id ||
+      field.key ||
+      field.name ||
+      `field-${index}`
+    );
+  }
+
+
+  function getFieldLabel(field, index) {
+
+    return (
+      field.label ||
+      field.title ||
+      field.name ||
+      getFieldId(field, index)
+    );
+  }
+
+
+  function getFieldType(field) {
+
+    return (
+      field.type ||
+      "text"
+    );
+  }
+
+
+  function getDefaultValue(field) {
+
+    if (
+      field.defaultValue !== undefined
+    ) {
+      return field.defaultValue;
+    }
+
+    if (
+      field.default !== undefined
+    ) {
+      return field.default;
+    }
+
+    if (
+      field.value !== undefined
+    ) {
+      return field.value;
+    }
+
+    if (
+      field.initialValue !== undefined
+    ) {
+      return field.initialValue;
+    }
+
+    return "";
+  }
+
+
+  function normaliseTemplates(raw) {
+
+    if (Array.isArray(raw)) {
+      return raw;
+    }
+
+    if (
+      raw &&
+      Array.isArray(raw.templates)
+    ) {
+      return raw.templates;
+    }
+
+    return [];
+  }
+
+
+  function escapeHtml(value) {
+
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+
+  function escapeRegExp(value) {
+
+    return String(value).replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&"
+    );
+  }
+
+
+  function replaceAllSafe(
+    source,
+    from,
+    to
+  ) {
+
+    if (
+      from === undefined ||
+      from === null ||
+      from === ""
+    ) {
+      return source;
+    }
+
+    const expression =
+      new RegExp(
+        escapeRegExp(String(from)),
+        "g"
+      );
+
+    return source.replace(
+      expression,
+      String(to)
+    );
+  }
+
+
+  function renderTemplateList(
+    filter = ""
+  ) {
+
+    const query =
+      filter
+        .trim()
+        .toLowerCase();
+
+    const visible =
+      state.templates.filter(
+        template => {
+
+          const haystack =
+            [
+              getTemplateName(template),
+              getTemplateDescription(template),
+              template.category || "",
+              getTemplateId(template)
+            ]
+              .join(" ")
+              .toLowerCase();
+
+          return haystack.includes(query);
+        }
+      );
+
+
+    if (!visible.length) {
+
+      elements.templateList.innerHTML =
+        `
+          <div class="empty">
+            No templates found.
+          </div>
+        `;
+
+      return;
+    }
+
+
+    elements.templateList.innerHTML =
+      visible
+        .map(
+          template => {
+
+            const id =
+              getTemplateId(template);
+
+            const active =
+              state.selected &&
+              getTemplateId(state.selected) === id;
+
+            return `
+              <button
+                class="
+                  template-card
+                  ${active ? "active" : ""}
+                "
+                data-template-id="${escapeHtml(id)}"
+                type="button"
+              >
+
+                <div class="template-title">
+                  ${escapeHtml(
+                    getTemplateName(template)
+                  )}
+                </div>
+
+                <div class="template-description">
+                  ${escapeHtml(
+                    getTemplateDescription(template)
+                  )}
+                </div>
+
+              </button>
+            `;
+          }
+        )
+        .join("");
+
+
+    elements.templateList
+      .querySelectorAll(
+        "[data-template-id]"
+      )
+      .forEach(
+        button => {
+
+          button.addEventListener(
+            "click",
+            () => {
+
+              const id =
+                button.dataset.templateId;
+
+              const template =
+                state.templates.find(
+                  item =>
+                    getTemplateId(item) === id
+                );
+
+              if (template) {
+                selectTemplate(template);
+              }
+            }
+          );
+        }
+      );
+  }
+
+
+  function buildDefaults(template) {
+
+    const fields =
+      getFields(template);
+
+    const defaults = {};
+
+    fields.forEach(
+      (field, index) => {
+
+        const id =
+          getFieldId(field, index);
+
+        defaults[id] =
+          String(
+            getDefaultValue(field) ?? ""
+          );
+      }
+    );
+
+    return defaults;
+  }
+
+
+  function buildEditor() {
+
+    if (!state.selected) {
+      return;
+    }
+
+
+    const fields =
+      getFields(state.selected);
+
+
+    if (!fields.length) {
+
+      elements.editorBody.innerHTML =
+        `
+          <div class="empty">
+            This template does not expose
+            editable fields yet.
+          </div>
+        `;
+
+      return;
+    }
+
+
+    elements.editorBody.innerHTML =
+      fields
+        .map(
+          (field, index) => {
+
+            const id =
+              getFieldId(field, index);
+
+            const label =
+              getFieldLabel(field, index);
+
+            const type =
+              getFieldType(field);
+
+            const value =
+              state.values[id] ?? "";
+
+            if (type === "textarea") {
+
+              return `
+                <div class="field">
+
+                  <label
+                    class="field-label"
+                    for="field-${escapeHtml(id)}"
+                  >
+                    <span>
+                      ${escapeHtml(label)}
+                    </span>
+
+                    <span class="field-type">
+                      TEXT
+                    </span>
+                  </label>
+
+                  <textarea
+                    id="field-${escapeHtml(id)}"
+                    data-field-id="${escapeHtml(id)}"
+                  >${escapeHtml(value)}</textarea>
+
+                </div>
+              `;
+            }
+
+
+            if (type === "color") {
+
+              const safeColor =
+                /^#[0-9a-f]{6}$/i.test(value)
+                  ? value
+                  : "#ffffff";
+
+              return `
+                <div class="field">
+
+                  <label class="field-label">
+                    <span>
+                      ${escapeHtml(label)}
+                    </span>
+
+                    <span class="field-type">
+                      COLOR
+                    </span>
+                  </label>
+
+                  <div class="color-row">
+
+                    <input
+                      class="color-picker"
+                      type="color"
+                      value="${escapeHtml(safeColor)}"
+                      data-color-for="${escapeHtml(id)}"
+                    />
+
+                    <input
+                      type="text"
+                      value="${escapeHtml(value)}"
+                      data-field-id="${escapeHtml(id)}"
+                    />
+
+                  </div>
+
+                </div>
+              `;
+            }
+
+
+            const htmlType =
+              type === "url"
+                ? "url"
+                : "text";
+
+
+            return `
+              <div class="field">
+
+                <label
+                  class="field-label"
+                  for="field-${escapeHtml(id)}"
+                >
+
+                  <span>
+                    ${escapeHtml(label)}
+                  </span>
+
+                  <span class="field-type">
+                    ${escapeHtml(type)}
+                  </span>
+
+                </label>
+
+                <input
+                  id="field-${escapeHtml(id)}"
+                  type="${htmlType}"
+                  value="${escapeHtml(value)}"
+                  data-field-id="${escapeHtml(id)}"
+                />
+
+              </div>
+            `;
+          }
+        )
+        .join("");
+
+
+    elements.editorBody
+      .querySelectorAll(
+        "[data-field-id]"
+      )
+      .forEach(
+        input => {
+
+          input.addEventListener(
+            "input",
+            event => {
+
+              const id =
+                event.target.dataset.fieldId;
+
+              state.values[id] =
+                event.target.value;
+
+
+              const colourPicker =
+                elements.editorBody
+                  .querySelector(
+                    `[data-color-for="${CSS.escape(id)}"]`
+                  );
+
+
+              if (
+                colourPicker &&
+                /^#[0-9a-f]{6}$/i.test(
+                  event.target.value
+                )
+              ) {
+                colourPicker.value =
+                  event.target.value;
+              }
+
+
+              renderPreview();
+            }
+          );
+        }
+      );
+
+
+    elements.editorBody
+      .querySelectorAll(
+        "[data-color-for]"
+      )
+      .forEach(
+        picker => {
+
+          picker.addEventListener(
+            "input",
+            event => {
+
+              const id =
+                event.target.dataset.colorFor;
+
+              state.values[id] =
+                event.target.value;
+
+
+              const textInput =
+                elements.editorBody
+                  .querySelector(
+                    `[data-field-id="${CSS.escape(id)}"]`
+                  );
+
+
+              if (textInput) {
+                textInput.value =
+                  event.target.value;
+              }
+
+
+              renderPreview();
+            }
+          );
+        }
+      );
+  }
+
+
+  function compileHtml() {
+
+    let html =
+      state.originalHtml;
+
+
+    Object.keys(state.values)
+      .forEach(
+        id => {
+
+          const original =
+            state.defaults[id] ?? "";
+
+          const current =
+            state.values[id] ?? "";
+
+
+          /*
+           * Future-proof marker format.
+           *
+           * In the next step our React Email
+           * builder will generate these markers.
+           */
+
+          html =
+            replaceAllSafe(
+              html,
+              `__MAILCAT_${id}__`,
+              current
+            );
+
+
+          /*
+           * MVP compatibility.
+           *
+           * Until markers exist, replace the
+           * original default text produced by
+           * React Email.
+           */
+
+          html =
+            replaceAllSafe(
+              html,
+              original,
+              current
+            );
+
+
+          /*
+           * Some HTML serializers encode text.
+           */
+
+          html =
+            replaceAllSafe(
+              html,
+              escapeHtml(original),
+              escapeHtml(current)
+            );
+        }
+      );
+
+
+    return html;
+  }
+
+
+  function renderPreview() {
+
+    if (!state.originalHtml) {
+      return;
+    }
+
+    state.currentHtml =
+      compileHtml();
+
+    elements.emailPreview.srcdoc =
+      state.currentHtml;
+  }
+
+
+  async function selectTemplate(
+    template
+  ) {
+
+    state.selected =
+      template;
+
+    elements.documentName.textContent =
+      getTemplateName(template);
+
+    elements.canvasInfo.textContent =
+      `${getTemplateName(template)} · Live preview`;
+
+
+    renderTemplateList(
+      elements.searchInput.value
+    );
+
+
+    const file =
+      getTemplateFile(template);
+
+
+    const response =
+      await fetch(
+        `/templates/${file}`
+      );
+
+
+    if (!response.ok) {
+
+      throw new Error(
+        `Unable to load ${file}`
+      );
+    }
+
+
+    state.originalHtml =
+      await response.text();
+
+
+    state.defaults =
+      buildDefaults(template);
+
+
+    state.values =
+      {
+        ...state.defaults
+      };
+
+
+    buildEditor();
+    renderPreview();
+  }
+
+
+  function resetTemplate() {
+
+    if (!state.selected) {
+      return;
+    }
+
+    state.values =
+      {
+        ...state.defaults
+      };
+
+    buildEditor();
+    renderPreview();
+
+    showToast(
+      "Template reset"
+    );
+  }
+
+
+  function setDevice(device) {
+
+    state.device =
+      device;
+
+    elements.device
+      .classList.toggle(
+        "mobile",
+        device === "mobile"
+      );
+
+
+    document
+      .querySelectorAll(
+        "[data-device]"
+      )
+      .forEach(
+        button => {
+
+          button.classList.toggle(
+            "active",
+            button.dataset.device === device
+          );
+        }
+      );
+  }
+
+
+  async function copyHtml() {
+
+    if (!state.currentHtml) {
+      return;
+    }
+
+
+    try {
+
+      await navigator.clipboard.writeText(
+        state.currentHtml
+      );
+
+      showToast(
+        "Email HTML copied"
+      );
+
+    } catch {
+
+      const textarea =
+        document.createElement(
+          "textarea"
+        );
+
+      textarea.value =
+        state.currentHtml;
+
+      document.body.appendChild(
+        textarea
+      );
+
+      textarea.select();
+
+      document.execCommand(
+        "copy"
+      );
+
+      textarea.remove();
+
+      showToast(
+        "Email HTML copied"
+      );
+    }
+  }
+
+function useTemplate() {
+  if (!state.selected) {
+    return;
+  }
+
+  const unresolved =
+    state.currentHtml.match(
+      /__MAILCAT_[A-Za-z0-9_-]+__/g
+    );
+
+  if (
+    unresolved &&
+    unresolved.length
+  ) {
+    console.error(
+      "Cannot use template. Unresolved fields:",
+      unresolved
+    );
+
+    showToast(
+      "Template contains unresolved fields"
+    );
+
+    return;
+  }
+
+  localStorage.setItem(
+    "mailcat.compose.html",
+    state.currentHtml
+  );
+
+  localStorage.setItem(
+    "mailcat.compose.template",
+    JSON.stringify({
+      id:
+        getTemplateId(
+          state.selected
+        ),
+
+      name:
+        getTemplateName(
+          state.selected
+        ),
+
+      values:
+        state.values
+    })
+  );
+
+  showToast(
+    "Opening Compose…"
+  );
+
+  setTimeout(
+    () => {
+      window.location.href =  "/compose-bridge.html";
+    },
+    250
+  );
+}
+    console.log(
+      "MAIL CAT COMPOSE HTML",
+      state.currentHtml
+    );
+  
+
+
+  async function boot() {
+
+    try {
+
+      const response =
+        await fetch(
+          "/templates/templates.json"
+        );
+
+
+      if (!response.ok) {
+
+        throw new Error(
+          `Manifest returned HTTP ${response.status}`
+        );
+      }
+
+
+      const raw =
+        await response.json();
+
+
+      state.templates =
+        normaliseTemplates(raw);
+
+
+      renderTemplateList();
+
+
+      /*
+       * Product Drop first if available.
+       */
+
+      const preferred =
+        state.templates.find(
+          template =>
+            getTemplateId(template)
+              .toLowerCase()
+              .includes("promotion")
+        ) ||
+        state.templates[0];
+
+
+      if (preferred) {
+
+        await selectTemplate(
+          preferred
+        );
+      }
+
+    } catch (error) {
+
+      console.error(error);
+
+      elements.templateList.innerHTML =
+        `
+          <div class="empty">
+            <strong>
+              Unable to load templates.
+            </strong>
+
+            <br><br>
+
+            ${escapeHtml(
+              error.message
+            )}
+          </div>
+        `;
+    }
+  }
+
+
+  elements.searchInput
+    .addEventListener(
+      "input",
+      event => {
+        renderTemplateList(
+          event.target.value
+        );
+      }
+    );
+
+
+  document
+    .querySelectorAll(
+      "[data-device]"
+    )
+    .forEach(
+      button => {
+
+        button.addEventListener(
+          "click",
+          () => {
+            setDevice(
+              button.dataset.device
+            );
+          }
+        );
+      }
+    );
+
+
+  elements.resetButton
+    .addEventListener(
+      "click",
+      resetTemplate
+    );
+
+
+  elements.resetTopButton
+    .addEventListener(
+      "click",
+      resetTemplate
+    );
+
+
+  elements.copyButton
+    .addEventListener(
+      "click",
+      copyHtml
+    );
+
+
+  elements.useButton
+    .addEventListener(
+      "click",
+      useTemplate
+    );
+
+
+  elements.useButtonBottom
+    .addEventListener(
+      "click",
+      useTemplate
+    );
+
+
+  boot();
+</script>
+
+</body>
+</html>
