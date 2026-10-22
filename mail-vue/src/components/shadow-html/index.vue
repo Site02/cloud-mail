@@ -6,6 +6,7 @@
 
 <script setup>
 import { ref, onMounted, watch } from 'vue'
+import { sanitizeHtml } from '@/utils/sanitize-html.js'
 
 const props = defineProps({
   html: {
@@ -26,8 +27,8 @@ function updateContent() {
   const bodyStyleMatch = props.html.match(bodyStyleRegex);
   const bodyStyle = bodyStyleMatch ? bodyStyleMatch[1] : '';
 
-  // 2. 移除 <body> 标签（保留内容）
-  const cleanedHtml = props.html.replace(/<\/?body[^>]*>/gi, '');
+  // 2. 移除 <body> 标签（保留内容）并清洗
+  const cleanedHtml = sanitizeHtml(props.html.replace(/<\/?body[^>]*>/gi, ''));
 
   // 3. 将 body 的 style 应用到 .shadow-content
   shadowRoot.innerHTML = `
@@ -63,7 +64,6 @@ function updateContent() {
         width: fit-content;
         height: fit-content;
         min-width: 100%;
-        ${bodyStyle ? bodyStyle : ''} /* 注入 body 的 style */
       }
 
       img:not(table img) {
@@ -76,6 +76,11 @@ function updateContent() {
       ${cleanedHtml}
     </div>
   `;
+
+  // body 的 style 通过 cssText 应用, 不拼接进 <style>, 避免注入
+  if (bodyStyle) {
+    shadowRoot.querySelector('.shadow-content').style.cssText += bodyStyle;
+  }
 }
 
 function autoScale() {
