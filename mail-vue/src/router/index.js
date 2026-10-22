@@ -14,7 +14,7 @@ const routes = [
             {
                 path: '/inbox',
                 name: 'email',
-                component: () => import('@/views/email/index.vue'),
+                component: () => import('@/views/mail-ui/index.vue'),
                 meta: {
                     title: 'inbox',
                     name: 'email',
