@@ -985,7 +985,12 @@ const emailService = {
 		}
 
 		//转发到其他邮箱，站内邮件没有可 forward 的原始邮件，通过发件渠道重新发送
-		if (forwardStatus === settingConst.forwardStatus.OPEN && forwardEmail && emailRowList.length > 0 && (useCloudflareEmail || resendToken)) {
+		if (forwardStatus === settingConst.forwardStatus.OPEN && forwardEmail && emailRowList.length > 0) {
+
+			if (!useCloudflareEmail && !resendToken) {
+				console.warn(`站内邮件转发到其他邮箱需要 send_email 绑定或 ${sendParams.accountEmail} 所属域名的 Resend token，已跳过`);
+				return;
+			}
 
 			await Promise.all(forwardEmail.split(',').map(async address => {
 
