@@ -43,5 +43,10 @@ crons = ["0 * * * *"]	#每小时执行；resetDaySendCount 仅在 UTC 0 点生�
 # orm_log = false			#是否sql日志
 
 
+# 保留控制台已有的资源绑定和运行时配置；Git 集成只更新代码。
+# 此处覆盖 Wrangler 的 keep_bindings，因此也包含变量及密钥类型。
+[unsafe.metadata]
+keep_bindings = ["plain_text", "json", "secret_text", "secret_key", "kv_namespace", "d1", "r2_bucket", "send_email", "ai"]
+
 [build]
 command = "pnpm --prefix ../mail-vue install && pnpm --prefix ../mail-vue run build"

@@ -105,9 +105,29 @@
 
 - **文件存储**：[Cloudflare R2](https://developers.cloudflare.com/r2/)
 
+## 自动部署、保留绑定与自动初始化
+
+Cloudflare 的 Git 集成负责构建和部署，GitHub Actions 等待同一次提交的 **Workers Builds: cloud-mail** 检查成功后，自动调用应用初始化接口；部署失败或等待超时会停止。**GitHub 不需要 Cloudflare API Token 或 Account ID**，读取部署检查使用 Actions 自动提供的 GitHub Token。
+
+默认 `wrangler.toml` 通过上传元数据的 `keep_bindings` 保留控制台已有的 KV、D1、R2、邮件服务、AI 绑定及运行时变量和密钥。首次使用需在 Cloudflare 绑定 `kv`、`db`，配置运行时 `domain`、`admin`、`jwt_secret`；以后部署沿用这些绑定。保留机制见 [Cloudflare 上传元数据说明](https://developers.cloudflare.com/workers/configuration/multipart-upload-metadata/)。
+
+在仓库 **Settings → Secrets and variables → Actions** 配置：
+
+| 名称 | 用途 | 示例 |
+| --- | --- | --- |
+| `DOMAIN` | 应用访问域名 | `firemail.pp.ua` |
+| `JWT_SECRET` | 与 Worker 运行时 `jwt_secret` 相同；Secret 和 Variable 均支持 | 已配置的密钥 |
+| `NAME`（可选） | Worker 名称，用于选择对应的 Cloudflare 部署检查；默认 `cloud-mail` | `cloud-mail` |
+| `PRODUCTION_BRANCH`（可选） | Cloudflare 生产部署分支；默认 `send`，其他分支不初始化生产应用 | `send` |
+| `APP_URL`（可选） | 应用地址与 `DOMAIN` 不同时优先使用；兼容旧变量 `CUSTOM_DOMAIN` | `https://mail.example.com` |
+
+推送到生产部署分支（默认 `send`）且修改应用代码时自动运行。Cloudflare 必须将该分支部署到此应用，并允许构建修改的路径；未触发 Cloudflare 构建会使初始化工作流等待超时。多次推送会取消同分支的旧初始化任务。需要重跑时，在 **Actions → Initialize cloud-mail after Cloudflare deployment → Run workflow** 选择生产部署分支。
+
+初始化只执行数据库升级并刷新设置缓存，不部署 Worker、不创建资源。网络或服务端短暂错误会重试；密钥不匹配或响应不是 `success` 会报错。GitHub 变量不会同步到 Cloudflare：Actions 的 `DOMAIN` 定位初始化地址，Worker 的 `domain` 仍为邮箱域名数组（如 `["firemail.pp.ua"]`）；旧的 Actions 域名数组使用第一项，访问地址不同请设 `APP_URL`。
+
 ## Mailjet 发信配置
 
-1. 更新后运行现有的数据库初始化入口 `/api/init/<JWT_SECRET>`（部署工作流会自动执行），添加 `mailjet_tokens` 字段并刷新设置缓存。
+1. 更新部署后，Actions 自动执行 `/api/init/<JWT_SECRET>`，添加 `mailjet_tokens` 字段并刷新设置缓存；也可手动重跑初始化工作流。
 2. 在 Mailjet 验证发件域名或地址，然后进入 **系统设置 → 邮件设置 → Mailjet 邮件发送**，选择发件域名并填写 **API Key** 和 **Secret Key**。密钥仅保存在后端，配置列表显示脱敏值。
 3. 配置了 Mailjet 的域名通过 Mailjet 发送站外邮件；其余域名继续优先使用 Cloudflare Email，其次 Resend。纯站内邮件仍在站内投递。两项密钥都留空保存可删除该域名的 Mailjet 配置。
 
