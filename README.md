@@ -63,7 +63,7 @@
 
 - **💻 响应式设计**：响应式布局自动适配PC和大部分手机端浏览器
 
-- **📧 邮件发送**：集成 Cloudflare Email 和 Resend 发送邮件，支持群发
+- **📧 邮件发送**：集成 Cloudflare Email、Resend 和 Mailjet 发送邮件，支持群发
 
 - **🛡️ 管理员功能**：可以对用户，邮件进行管理，RABC权限控制对功能及使用资源限制
 
@@ -97,13 +97,23 @@
 
 - **UI框架**：[Element Plus](https://element-plus.org/) 
 
-- **邮件发送：** [Cloudflare Email](https://developers.cloudflare.com/email-service/) / [Resend](https://resend.com/)
+- **邮件发送：** [Cloudflare Email](https://developers.cloudflare.com/email-service/) / [Resend](https://resend.com/) / [Mailjet](https://www.mailjet.com/)
 
 - **缓存**：[Cloudflare KV](https://developers.cloudflare.com/kv/)
 
 - **数据库**：[Cloudflare D1](https://developers.cloudflare.com/d1/)
 
 - **文件存储**：[Cloudflare R2](https://developers.cloudflare.com/r2/)
+
+## Mailjet 发信配置
+
+1. 更新后运行现有的数据库初始化入口 `/api/init/<JWT_SECRET>`（部署工作流会自动执行），添加 `mailjet_tokens` 字段并刷新设置缓存。
+2. 在 Mailjet 验证发件域名或地址，然后进入 **系统设置 → 邮件设置 → Mailjet 邮件发送**，选择发件域名并填写 **API Key** 和 **Secret Key**。密钥仅保存在后端，配置列表显示脱敏值。
+3. 配置了 Mailjet 的域名通过 Mailjet 发送站外邮件；其余域名继续优先使用 Cloudflare Email，其次 Resend。纯站内邮件仍在站内投递。两项密钥都留空保存可删除该域名的 Mailjet 配置。
+
+支持普通群发、分开发送、附件、正文 CID 图片和回复邮件。分开发送自动按每批最多 50 封提交，每位收件人独立一封；部分失败时保留已成功的发件记录，仅重试失败或尚未提交的收件人。Mailjet 接受请求后记录为“已发送”，不代表已投递。
+
+实现基于 [Mailjet Send API v3.1](https://dev.mailjet.com/docs/email-api/send-api-v31/send-basic-email)。开发验证可使用 [SandboxMode](https://dev.mailjet.com/docs/email-api/send-api-v31/sandbox.mode)，校验实际 API 请求而不投递邮件。后端回归测试：`cd mail-worker && pnpm test:unit`。
 
 ## 目录结构
 

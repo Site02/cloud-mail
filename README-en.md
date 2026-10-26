@@ -59,7 +59,7 @@ With only one domain, you can create multiple different email addresses, similar
 
 - **💻 Responsive Design**: Automatically adapts to both desktop and most mobile browsers.
 
-- **📧 Email Sending**: Integrated with Cloudflare Email and Resend for sending email.
+- **📧 Email Sending**: Integrated with Cloudflare Email, Resend and Mailjet for sending email.
 
 - **🛡️ Admin Features**: Admin controls for user and email management with RBAC-based access control.
 
@@ -91,13 +91,23 @@ With only one domain, you can create multiple different email addresses, similar
 
 - **UI Framework**: [Element Plus](https://element-plus.org/)
 
-- **Email Sending**: [Cloudflare Email](https://developers.cloudflare.com/email-service/) / [Resend](https://resend.com/)
+- **Email Sending**: [Cloudflare Email](https://developers.cloudflare.com/email-service/) / [Resend](https://resend.com/) / [Mailjet](https://www.mailjet.com/)
 
 - **Cache**: [Cloudflare KV](https://developers.cloudflare.com/kv/)
 
 - **Database**: [Cloudflare D1](https://developers.cloudflare.com/d1/)
 
 - **File Storage**: [Cloudflare R2](https://developers.cloudflare.com/r2/)
+
+## Mailjet sending configuration
+
+1. After updating, run the existing database initialization endpoint `/api/init/<JWT_SECRET>` to add `mailjet_tokens` and refresh cached settings. The deployment workflow runs this automatically.
+2. Verify the sender domain or address in Mailjet. In **System Settings → Email → Mailjet email sending**, select the sender domain and enter both **API Key** and **Secret Key**. Credentials are stored on the backend and masked in the configuration list.
+3. Domains configured for Mailjet use it for external mail. Other domains continue to prefer Cloudflare Email, then Resend. Internal-only messages use local delivery. Save with both keys empty to remove a domain's Mailjet configuration.
+
+Supports shared-recipient sending, separate messages, attachments, inline CID images and replies. Separate sending uses batches of at most 50 messages, with one message per recipient. Partial failures preserve successful records and leave failed or unsubmitted recipients available for retry. Accepted messages are marked as sent, rather than delivered.
+
+Uses [Mailjet Send API v3.1](https://dev.mailjet.com/docs/email-api/send-api-v31/send-basic-email). [SandboxMode](https://dev.mailjet.com/docs/email-api/send-api-v31/sandbox.mode) validates real API requests without delivering mail. Run backend regression tests with `cd mail-worker && pnpm test:unit`.
 
 ## Project Structure
 
