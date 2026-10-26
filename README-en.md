@@ -59,7 +59,7 @@ With only one domain, you can create multiple different email addresses, similar
 
 - **💻 Responsive Design**: Automatically adapts to both desktop and most mobile browsers.
 
-- **📧 Email Sending**: Integrated with Cloudflare Email and Resend for sending email.
+- **📧 Email Sending**: Integrated with Cloudflare Email, Resend and Mailjet for sending email.
 
 - **🛡️ Admin Features**: Admin controls for user and email management with RBAC-based access control.
 
@@ -91,13 +91,54 @@ With only one domain, you can create multiple different email addresses, similar
 
 - **UI Framework**: [Element Plus](https://element-plus.org/)
 
-- **Email Sending**: [Cloudflare Email](https://developers.cloudflare.com/email-service/) / [Resend](https://resend.com/)
+- **Email Sending**: [Cloudflare Email](https://developers.cloudflare.com/email-service/) / [Resend](https://resend.com/) / [Mailjet](https://www.mailjet.com/)
 
 - **Cache**: [Cloudflare KV](https://developers.cloudflare.com/kv/)
 
 - **Database**: [Cloudflare D1](https://developers.cloudflare.com/d1/)
 
 - **File Storage**: [Cloudflare R2](https://developers.cloudflare.com/r2/)
+
+## Automatic deployment, binding preservation, and initialization
+
+Cloudflare's Git integration builds and deploys the Worker. GitHub Actions waits for **Workers Builds: cloud-mail** to succeed for the same commit, then calls the application's initialization endpoint. Failed deployments or timeouts stop initialization. **No Cloudflare API token or account ID is needed in GitHub**; reading build checks uses the automatically provided GitHub Actions token.
+
+The default `wrangler.toml` uses upload metadata `keep_bindings` to preserve dashboard-managed KV, D1, R2, email, and AI bindings, as well as runtime variables and secrets. Initially bind `kv` and `db` in Cloudflare and configure the runtime `domain`, `admin`, and `jwt_secret`. Future deployments retain those bindings. See [Cloudflare upload metadata](https://developers.cloudflare.com/workers/configuration/multipart-upload-metadata/).
+
+Configure Cloudflare **Worker → Settings → Builds** as follows:
+
+| Setting | Value |
+| --- | --- |
+| Production branch | `send` (matching `PRODUCTION_BRANCH` below) |
+| Root directory | `mail-worker` |
+| Build command | `pnpm run build` |
+| Deploy command | `pnpm run deploy` |
+
+The production deploy script explicitly selects `mail-worker/wrangler.toml`. `wrangler-dev.toml` and `wrangler-test.toml` contain example resource IDs for development and testing; `wrangler-action.toml` is the legacy deployment template. If logs reference nonexistent example KV/D1 IDs, check the deployed branch, commit, and configuration file. Cloudflare Builds compiles the frontend through the build command above.
+
+Configure repository **Settings → Secrets and variables → Actions** values:
+
+| Name | Purpose | Example |
+| --- | --- | --- |
+| `DOMAIN` | Application hostname | `firemail.pp.ua` |
+| `JWT_SECRET` | Must match the Worker runtime `jwt_secret`; both Secrets and Variables are supported | Your configured secret |
+| `NAME` (optional) | Worker name used to select the Cloudflare deployment check; defaults to `cloud-mail` | `cloud-mail` |
+| `PRODUCTION_BRANCH` (optional) | Cloudflare production deployment branch; defaults to `send`. Other branches do not initialize production | `send` |
+| `APP_URL` (optional) | Overrides `DOMAIN` when the application has a separate URL; legacy `CUSTOM_DOMAIN` also supported | `https://mail.example.com` |
+
+Changes to application code on the production branch (default `send`) trigger initialization automatically. Cloudflare must deploy that branch to this application and allow the changed paths in its build watch configuration. Without a corresponding Cloudflare build, the workflow times out. New pushes cancel older initialization runs on the same branch. To rerun, open **Actions → Initialize cloud-mail after Cloudflare deployment → Run workflow** and select the production branch.
+
+Initialization upgrades the database and refreshes cached settings without deploying Workers or creating resources. Temporary network/server errors are retried; mismatched secrets or responses other than `success` fail. GitHub variables are not synchronized to Cloudflare: the Actions `DOMAIN` locates the initialization endpoint, while the Worker runtime `domain` remains an array of email domains such as `["firemail.pp.ua"]`. Legacy Actions domain arrays use their first entry; set `APP_URL` when the application is hosted elsewhere.
+
+## Mailjet sending configuration
+
+1. After deployment, Actions automatically calls `/api/init/<JWT_SECRET>` to add `mailjet_tokens` and refresh cached settings. The initialization workflow can also be rerun manually.
+2. Verify the sender domain or address in Mailjet. In **System Settings → Email → Mailjet email sending**, select the sender domain and enter both **API Key** and **Secret Key**. Credentials are stored on the backend and masked in the configuration list.
+3. Domains configured for Mailjet use it for external mail. Other domains continue to prefer Cloudflare Email, then Resend. Internal-only messages use local delivery. Save with both keys empty to remove a domain's Mailjet configuration.
+
+Supports shared-recipient sending, separate messages, attachments, inline CID images and replies. Separate sending uses batches of at most 50 messages, with one message per recipient. Partial failures preserve successful records and leave failed or unsubmitted recipients available for retry. Accepted messages are marked as sent, rather than delivered.
+
+Uses [Mailjet Send API v3.1](https://dev.mailjet.com/docs/email-api/send-api-v31/send-basic-email). [SandboxMode](https://dev.mailjet.com/docs/email-api/send-api-v31/sandbox.mode) validates real API requests without delivering mail. Run backend regression tests with `cd mail-worker && pnpm test:unit`.
 
 ## Project Structure
 
