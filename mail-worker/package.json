@@ -3,10 +3,11 @@
 	"version": "0.0.0",
 	"private": true,
 	"scripts": {
+		"build": "pnpm --prefix ../mail-vue install --frozen-lockfile && pnpm --prefix ../mail-vue run build",
 		"dev": "wrangler dev --config wrangler-dev.toml",
 		"test": "wrangler deploy --config wrangler-test.toml",
 		"test:unit": "vitest run --config vitest.unit.config.js",
-		"deploy": "wrangler deploy",
+		"deploy": "wrangler deploy --config wrangler.toml",
 		"start": "wrangler dev"
 	},
 	"devDependencies": {

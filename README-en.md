@@ -105,6 +105,17 @@ Cloudflare's Git integration builds and deploys the Worker. GitHub Actions waits
 
 The default `wrangler.toml` uses upload metadata `keep_bindings` to preserve dashboard-managed KV, D1, R2, email, and AI bindings, as well as runtime variables and secrets. Initially bind `kv` and `db` in Cloudflare and configure the runtime `domain`, `admin`, and `jwt_secret`. Future deployments retain those bindings. See [Cloudflare upload metadata](https://developers.cloudflare.com/workers/configuration/multipart-upload-metadata/).
 
+Configure Cloudflare **Worker → Settings → Builds** as follows:
+
+| Setting | Value |
+| --- | --- |
+| Production branch | `send` (matching `PRODUCTION_BRANCH` below) |
+| Root directory | `mail-worker` |
+| Build command | `pnpm run build` |
+| Deploy command | `pnpm run deploy` |
+
+The production deploy script explicitly selects `mail-worker/wrangler.toml`. `wrangler-dev.toml` and `wrangler-test.toml` contain example resource IDs for development and testing; `wrangler-action.toml` is the legacy deployment template. If logs reference nonexistent example KV/D1 IDs, check the deployed branch, commit, and configuration file. Cloudflare Builds compiles the frontend through the build command above.
+
 Configure repository **Settings → Secrets and variables → Actions** values:
 
 | Name | Purpose | Example |

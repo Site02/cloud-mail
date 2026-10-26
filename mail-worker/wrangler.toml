@@ -49,4 +49,4 @@ crons = ["0 * * * *"]	#每小时执行；resetDaySendCount 仅在 UTC 0 点生�
 keep_bindings = ["plain_text", "json", "secret_text", "secret_key", "kv_namespace", "d1", "r2_bucket", "send_email", "ai"]
 
 [build]
-command = "pnpm --prefix ../mail-vue install && pnpm --prefix ../mail-vue run build"
+command = "pnpm run build"
